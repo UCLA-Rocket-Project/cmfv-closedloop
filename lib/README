@@ -1,0 +1,23 @@
+# Libraries
+
+PlatformIO's testing framework is setup such that modules you want to unit test should be placed in the Libraries folder, or `lib/` i.e. this directory.
+
+## How the `lib/` directory for this project is setup
+
+Currently, all self-created modules which can be compiled on x86_64 (i.e. their dependencies can also compile there, or at least indicate so or allow for this without too much effort) are placed in the `modules/` subfolder. 
+
+All self-created modules which can't easily be compiled on x86_64 are placed in the `modules_arduino/` subfolder. 
+
+This division exists so that the unit tests in `../test/test_common/` and `../test/test_desktop/` can compile natively on your desktop (which is probably x86_64), when they don't reference any modules in `modules_arduino/`. PlatformIO will build entire libraries at once, and we want to (in our unit test source files) be able to select for components that can compile on x86_64 (by choosing which headers to include) without unintentionally causing PlatformIO to attempt compiling stuff which cannnot compile on x86_64. 
+
+### library.json
+
+Notice how in both `modules/` and `modules_arduino/`, the `library.json` file indicates to PlatformIO (or more specifically, its Library Dependency Finder) the flags
+
+```json
+    "flags": [
+      "-I ../../include"
+    ]
+```
+
+This is so that header-only files such as [config.h](../include/config.h) will be included when compiling the self-created modules as libraries. 

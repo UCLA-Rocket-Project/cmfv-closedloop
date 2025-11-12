@@ -1,0 +1,9 @@
+{
+  "name": "Self-written modules that require Arduino-only libraries",
+  "version": "0.1.0",
+  "build": {
+    "flags": [
+      "-I ../../include"
+    ]
+  }
+}

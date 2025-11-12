@@ -1,0 +1,21 @@
+{
+  "name": "Arduino AMT22 Library",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SDibla/Arduino-STM32-AMT22_Library.git"
+  },
+  "license": "MIT",
+  "frameworks": [
+    "arduino",
+    "linux_x86_64"
+  ],
+  "export": {
+    "include": [
+      "src",
+      "library.json"
+    ],
+    "exclude": [
+      "examples"
+    ]
+  }
+}

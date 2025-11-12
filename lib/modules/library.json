@@ -1,0 +1,9 @@
+{
+  "name": "Self-written modules that can compile on linux_x86_64 with ArduinoFake",
+  "version": "0.1.0",
+  "build": {
+    "flags": [
+      "-I ../../include"
+    ]
+  }
+}
