@@ -235,15 +235,6 @@ void openLoopInit() {
         }
         // Update current angle after movement
         channel.currentAngle = newAngle;
-        
-        if (fabs(newAngle - currentAngle) > FDIRConfig::MOTION_EXPECTED_ANGLE_THRESHOLD && 
-            fabs(ValveConfig::START_ANGLE - currentAngle) > ValveConfig::ANGLE_TOLERANCE) {
-            // No motion detected
-            Serial.print("++++");
-            faults.noMotion = true;
-            systemState.changeStateTo(SystemStateEnum::FORCED_OPEN_LOOP);
-            return;
-        }
     }
     
     // If valve at starting position, check if MPV is open, then after the pre closed loop timer elapses go into closed loop
@@ -271,7 +262,6 @@ void closedLoop() {
     unsigned long now = millis();
     float dt = (now - systemState.lastControlTime) / 1000.0f; 
     systemState.lastControlTime = now;
-    static int noMotionCount = 0;
 
     // Minimum dt to avoid division by zero or unrealistic values
     if (dt <= 0.0f || dt > 10.0f) {
@@ -335,45 +325,6 @@ void closedLoop() {
             return;
         }
         channel.currentAngle = angleAfterMove;
-
-        bool motionExpected = fabs(newTargetAngle - oldTargetAngle) > FDIRConfig::MOTION_EXPECTED_ANGLE_THRESHOLD;
-        bool motionDetected = fabs(angleAfterMove - angleBeforeMove) > FDIRConfig::MOTION_DETECTED_ANGLE_THRESHOLD;
-
-        // Serial.print("@");
-        // Serial.print(motionExpected);
-        // Serial.print(",");
-        // Serial.print(channel.targetAngle);
-        // Serial.print(",");
-        // Serial.print(oldTargetAngle);
-        // Serial.print("$$");
-        // Serial.print(motionDetected);
-        // Serial.print(",");
-        // Serial.print(angleAfterMove);
-        // Serial.print(",");
-        // Serial.print(angleBeforeMove);
-        // Serial.print("@");
-
-        // Check for no motion faults 
-        if (motionExpected && !motionDetected) {
-            noMotionCount++;
-            if (noMotionCount >= 3){
-                // Serial.print(newTargetAngle);
-                // Serial.print(",");
-                // Serial.print(oldTargetAngle);
-                // Serial.print(",");
-                // Serial.print(angleAfterMove);
-                // Serial.print(",");
-                // Serial.print(angleBeforeMove);
-                // Serial.print(",");
-                // Serial.print("####");
-                faults.noMotion = true;
-                setMPV(false);
-                systemState.changeStateTo(SystemStateEnum::EMERGENCY_STOP);
-                return;
-            }
-        } else {
-            noMotionCount = 0;
-        }
 
 #ifdef USE_OSCILLATION_DETECTOR
         // The check for whether the move is within tolerance is removed for now, placeholder in case we want to add back.
