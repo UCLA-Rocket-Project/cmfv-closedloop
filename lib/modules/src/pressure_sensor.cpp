@@ -3,7 +3,7 @@
 #include <math.h>
 
 PressureSensor::PressureSensor() 
-    : m_prevP1(0.0f), m_prevP2(0.0f), m_firstReading(true), m_consecutiveDifferenceFaults(0) {}
+    : m_prevP1(0.0f), m_prevP2(0.0f), m_firstReading(true), m_consecutiveDifferenceFaults(0), m_lastGoodPressure(0.0f) {}
 
 SensorStatus PressureSensor::validateTwoSensors(float P1, float P2, float& chosenPressure) {
     bool ok1 = isPressureValid(P1) && (m_firstReading || isJumpAcceptable(P1, m_prevP1));
@@ -24,6 +24,7 @@ SensorStatus PressureSensor::validateTwoSensors(float P1, float P2, float& chose
         if (difference <= SensorConfig::PAIR_DIFFERENCE_THRESHOLD) {
             // Sensors agree, average them
             chosenPressure = (P1 + P2) * 0.5f;
+            m_lastGoodPressure = chosenPressure; 
             m_consecutiveDifferenceFaults = 0;  
             return SensorStatus::OK_BOTH;
         } else {
@@ -35,7 +36,7 @@ SensorStatus PressureSensor::validateTwoSensors(float P1, float P2, float& chose
                 chosenPressure = 0.0f;
                 return SensorStatus::TWO_ILLOGICAL;
             } else {
-                chosenPressure = (P1 + P2) * 0.5f;
+                chosenPressure = m_lastGoodPressure;
                 return SensorStatus::OK_BOTH;
             }
         }
@@ -43,6 +44,7 @@ SensorStatus PressureSensor::validateTwoSensors(float P1, float P2, float& chose
     
     // Exactly one sensor is valid
     chosenPressure = ok1 ? P1 : P2;
+    m_lastGoodPressure = chosenPressure; 
     return SensorStatus::ONE_ILLOGICAL;
 }
 

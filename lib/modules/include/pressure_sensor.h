@@ -31,7 +31,8 @@ private:
     float m_prevP1;
     float m_prevP2;
     bool m_firstReading;
-    int m_consecutiveDifferenceFaults; 
+    int m_consecutiveDifferenceFaults;
+    float m_lastGoodPressure;
 };
 
 #endif // PRESSURE_SENSOR_H

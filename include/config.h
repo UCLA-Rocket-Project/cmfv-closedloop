@@ -159,7 +159,7 @@ struct SensorConfig {
     static constexpr float P_MAX = 1000.0f;           // Maximum valid pressure (PSI)
     // static constexpr float MAX_PRESSURE_JUMP = 200.0f; // Max jump between readings (PSI)
     static constexpr float PAIR_DIFFERENCE_THRESHOLD = 25.0f; // Max difference between PT1/PT2
-    static constexpr int PAIR_DIFFERENCE_CONSECUTIVE_COUNT = 10; // Number of consecutive faults before triggering
+    static constexpr int PAIR_DIFFERENCE_CONSECUTIVE_COUNT = 5; // Number of consecutive faults before triggering
     
     // Control tolerance
     static constexpr float PRESSURE_TOLERANCE = 5.0f; // Acceptable pressure error (PSI)
