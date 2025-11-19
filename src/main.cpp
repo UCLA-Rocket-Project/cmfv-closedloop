@@ -246,9 +246,13 @@ void openLoopInit() {
                 systemState.preClosedLoopTimer = millis();
             }
             if (millis() - systemState.preClosedLoopTimer >= (TimingConfig::SAFE_TIMER_S * 1000UL)) {
+#if OPEN_LOOP_MODE
+                systemState.changeStateTo(SystemStateEnum::FORCED_OPEN_LOOP);
+#else
                 systemState.changeStateTo(SystemStateEnum::CLOSED_LOOP);
                 systemState.enterClosedLoopTime = millis();
                 systemState.lastControlTime = millis(); // Reset timing for dt calculation
+#endif
             }
         } else {
             systemState.mpvWasOpen = false;
@@ -276,7 +280,6 @@ void closedLoop() {
         systemState.changeStateTo(SystemStateEnum::FORCED_OPEN_LOOP);
         return;
     }
-
     
     if (redBandCheck || (millis() - systemState.enterClosedLoopTime) > TimingConfig::REDBAND_TIMEOUT * 1000UL){
         redBandCheck = true;

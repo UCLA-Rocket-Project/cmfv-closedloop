@@ -136,6 +136,9 @@ void resetSystemOnMpvCycle() {
     controller->getOscillationDetector().reset();
 #endif
     
+    // Reset pressure sensor consecutive faults
+    pressureSensor->resetConsecutiveFaults();
+    
     // Reset timing variables
     systemState.initTimers();
     
@@ -172,10 +175,16 @@ bool isAtStartAngle(float currentAngle) {
     return fabs(currentAngle - ValveConfig::START_ANGLE) <= ValveConfig::ANGLE_TOLERANCE;
 }
 
-bool checkRedBand(float pressure) {
-    float pressureError = fabs(ControllerConfig::TARGET_PRESSURE_PSI - pressure);
+bool checkRedBand(float pressure) {    
+    if (pressure > ControllerConfig::TARGET_PRESSURE_PSI + MotorControlConfig::REDBAND_PRESSURE_UPPER) {
+        return false;
+    }
     
-    return pressureError <= MotorControlConfig::REDBAND_PRESSURE;
+    if (pressure < ControllerConfig::TARGET_PRESSURE_PSI - MotorControlConfig::REDBAND_PRESSURE_LOWER) {
+        return false;
+    }
+    
+    return true;
 }
 
 SystemStateEnum getSyncedState(SystemStateEnum currentState, SystemStateEnum otherControllerState, float currentAngle) {

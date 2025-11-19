@@ -14,6 +14,9 @@
 // Set to true for FUEL system, false for OXIDIZER system
 #define IS_FUEL_SYSTEM true
 
+// Open Loop toggle
+#define OPEN_LOOP_MODE false
+
 // ================================
 // UTILITY FUNCTIONS
 // ================================
@@ -141,8 +144,9 @@ struct MotorControlConfig {
     // Ignore angle errors smaller than this threshold.
     static constexpr float ANGLE_DEADBAND_DEG = ValveConfig::ANGLE_TOLERANCE;
 
-    // Redband pressure tolerance (PSI) - maximum allowable error from target pressure
-    static constexpr float REDBAND_PRESSURE = 50.0; 
+    // Redband pressure tolerances (PSI) - maximum allowable error from target pressure
+    static constexpr float REDBAND_PRESSURE_UPPER = 25.0;
+    static constexpr float REDBAND_PRESSURE_LOWER = 35.0;  
 };
 
 // ================================
@@ -155,6 +159,7 @@ struct SensorConfig {
     static constexpr float P_MAX = 1000.0f;           // Maximum valid pressure (PSI)
     // static constexpr float MAX_PRESSURE_JUMP = 200.0f; // Max jump between readings (PSI)
     static constexpr float PAIR_DIFFERENCE_THRESHOLD = 25.0f; // Max difference between PT1/PT2
+    static constexpr int PAIR_DIFFERENCE_CONSECUTIVE_COUNT = 10; // Number of consecutive faults before triggering
     
     // Control tolerance
     static constexpr float PRESSURE_TOLERANCE = 5.0f; // Acceptable pressure error (PSI)

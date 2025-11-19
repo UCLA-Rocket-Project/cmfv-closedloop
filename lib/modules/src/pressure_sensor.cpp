@@ -3,7 +3,7 @@
 #include <math.h>
 
 PressureSensor::PressureSensor() 
-    : m_prevP1(0.0f), m_prevP2(0.0f), m_firstReading(true) {}
+    : m_prevP1(0.0f), m_prevP2(0.0f), m_firstReading(true), m_consecutiveDifferenceFaults(0) {}
 
 SensorStatus PressureSensor::validateTwoSensors(float P1, float P2, float& chosenPressure) {
     bool ok1 = isPressureValid(P1) && (m_firstReading || isJumpAcceptable(P1, m_prevP1));
@@ -24,16 +24,20 @@ SensorStatus PressureSensor::validateTwoSensors(float P1, float P2, float& chose
         if (difference <= SensorConfig::PAIR_DIFFERENCE_THRESHOLD) {
             // Sensors agree, average them
             chosenPressure = (P1 + P2) * 0.5f;
+            m_consecutiveDifferenceFaults = 0;  
             return SensorStatus::OK_BOTH;
         } else {
             // Sensors disagree significantly
-            chosenPressure = 0.0f;
-            // Serial.print("!!!!!!");
-            // Serial.print(P1);
-            // Serial.print(",");
-            // Serial.print(P2);
-            // Serial.print("~~~~~~");
-            return SensorStatus::TWO_ILLOGICAL;
+            m_consecutiveDifferenceFaults++;
+            
+            // Only trigger fault after consecutive threshold is reached
+            if (m_consecutiveDifferenceFaults >= SensorConfig::PAIR_DIFFERENCE_CONSECUTIVE_COUNT) {
+                chosenPressure = 0.0f;
+                return SensorStatus::TWO_ILLOGICAL;
+            } else {
+                chosenPressure = (P1 + P2) * 0.5f;
+                return SensorStatus::OK_BOTH;
+            }
         }
     }
     
@@ -55,4 +59,8 @@ void PressureSensor::updatePreviousReadings(float P1, float P2) {
     m_prevP1 = P1;
     m_prevP2 = P2;
     m_firstReading = false;
+}
+
+void PressureSensor::resetConsecutiveFaults() {
+    m_consecutiveDifferenceFaults = 0;
 }
