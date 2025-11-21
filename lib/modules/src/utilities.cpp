@@ -68,6 +68,11 @@ bool readManifoldPressures(float& pressure) {
         return false;
     }
     
+    // Check if sensors are pending fault
+    if (status == SensorStatus::PENDING_FAULT) {
+        return false; 
+    }
+    
     return true;
 }
 

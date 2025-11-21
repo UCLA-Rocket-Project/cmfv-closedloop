@@ -5,7 +5,8 @@
 enum class SensorStatus {
     OK_BOTH,
     ONE_ILLOGICAL,
-    TWO_ILLOGICAL
+    TWO_ILLOGICAL,
+    PENDING_FAULT  
 };
 
 class PressureSensor {
@@ -32,7 +33,8 @@ private:
     float m_prevP2;
     bool m_firstReading;
     int m_consecutiveDifferenceFaults;
-    float m_lastGoodPressure;
+    int m_consecutiveInvalidP1;
+    int m_consecutiveInvalidP2;
 };
 
 #endif // PRESSURE_SENSOR_H

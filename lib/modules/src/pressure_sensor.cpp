@@ -3,18 +3,29 @@
 #include <math.h>
 
 PressureSensor::PressureSensor() 
-    : m_prevP1(0.0f), m_prevP2(0.0f), m_firstReading(true), m_consecutiveDifferenceFaults(0), m_lastGoodPressure(0.0f) {}
+    : m_prevP1(0.0f), m_prevP2(0.0f), m_firstReading(true), m_consecutiveDifferenceFaults(0), m_consecutiveInvalidP1(0), m_consecutiveInvalidP2(0) {}
 
 SensorStatus PressureSensor::validateTwoSensors(float P1, float P2, float& chosenPressure) {
-    bool ok1 = isPressureValid(P1) && (m_firstReading || isJumpAcceptable(P1, m_prevP1));
-    bool ok2 = isPressureValid(P2) && (m_firstReading || isJumpAcceptable(P2, m_prevP2));
+    bool validJump1 = m_firstReading || isJumpAcceptable(P1, m_prevP1);
+    bool validJump2 = m_firstReading || isJumpAcceptable(P2, m_prevP2);
+    
+    if (!isPressureValid(P1)) {
+        m_consecutiveInvalidP1++;
+    } else {
+        m_consecutiveInvalidP1 = 0;
+    }
+    
+    if (!isPressureValid(P2)) {
+        m_consecutiveInvalidP2++;
+    } else {
+        m_consecutiveInvalidP2 = 0;
+    }
+    
+    bool ok1 = m_consecutiveInvalidP1 < SensorConfig::PAIR_DIFFERENCE_CONSECUTIVE_COUNT;
+    bool ok2 = m_consecutiveInvalidP2 < SensorConfig::PAIR_DIFFERENCE_CONSECUTIVE_COUNT;
     
     if (!ok1 && !ok2) {
         chosenPressure = 0.0f; // Invalid value
-        // Serial.print("@@@@@@");
-        // Serial.print(P1);
-        // Serial.print(",");
-        // Serial.print(P2);
         return SensorStatus::TWO_ILLOGICAL;
     }
     
@@ -24,7 +35,6 @@ SensorStatus PressureSensor::validateTwoSensors(float P1, float P2, float& chose
         if (difference <= SensorConfig::PAIR_DIFFERENCE_THRESHOLD) {
             // Sensors agree, average them
             chosenPressure = (P1 + P2) * 0.5f;
-            m_lastGoodPressure = chosenPressure; 
             m_consecutiveDifferenceFaults = 0;  
             return SensorStatus::OK_BOTH;
         } else {
@@ -36,15 +46,15 @@ SensorStatus PressureSensor::validateTwoSensors(float P1, float P2, float& chose
                 chosenPressure = 0.0f;
                 return SensorStatus::TWO_ILLOGICAL;
             } else {
-                chosenPressure = m_lastGoodPressure;
-                return SensorStatus::OK_BOTH;
+                chosenPressure = 0.0f;
+                return SensorStatus::PENDING_FAULT;
             }
         }
     }
     
     // Exactly one sensor is valid
     chosenPressure = ok1 ? P1 : P2;
-    m_lastGoodPressure = chosenPressure; 
+    m_consecutiveDifferenceFaults = 0;
     return SensorStatus::ONE_ILLOGICAL;
 }
 
@@ -65,4 +75,6 @@ void PressureSensor::updatePreviousReadings(float P1, float P2) {
 
 void PressureSensor::resetConsecutiveFaults() {
     m_consecutiveDifferenceFaults = 0;
+    m_consecutiveInvalidP1 = 0;
+    m_consecutiveInvalidP2 = 0;
 }

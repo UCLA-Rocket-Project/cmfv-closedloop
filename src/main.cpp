@@ -275,9 +275,10 @@ void closedLoop() {
     // Read pressure sensors for this manifold
     float pressure;
     if (!readManifoldPressures(pressure)) {
-        // Sensor fault detected (two illogical PTs)
-        faults.sensorFault = true;
-        systemState.changeStateTo(SystemStateEnum::FORCED_OPEN_LOOP);
+        // Check if sensor fault or pending fault
+        if (faults.sensorFault) {
+            systemState.changeStateTo(SystemStateEnum::FORCED_OPEN_LOOP);
+        }
         return;
     }
     
