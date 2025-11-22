@@ -20,9 +20,14 @@ SensorStatus PressureSensor::validateTwoSensors(float P1, float P2, float& chose
     } else {
         m_consecutiveInvalidP2 = 0;
     }
-    
-    bool ok1 = m_consecutiveInvalidP1 < SensorConfig::PAIR_DIFFERENCE_CONSECUTIVE_COUNT;
-    bool ok2 = m_consecutiveInvalidP2 < SensorConfig::PAIR_DIFFERENCE_CONSECUTIVE_COUNT;
+
+    if (m_consecutiveInvalidP2 != 0 && m_consecutiveInvalidP1 != 0 && (m_consecutiveInvalidP2 < SensorConfig::PAIR_DIFFERENCE_CONSECUTIVE_COUNT || m_consecutiveInvalidP1 < SensorConfig::PAIR_DIFFERENCE_CONSECUTIVE_COUNT)){
+        chosenPressure = 0.0f;
+        return SensorStatus::PENDING_FAULT;
+    }
+
+    bool ok1 = m_consecutiveInvalidP1 == 0;
+    bool ok2 = m_consecutiveInvalidP2 == 0;
     
     if (!ok1 && !ok2) {
         chosenPressure = 0.0f; // Invalid value
