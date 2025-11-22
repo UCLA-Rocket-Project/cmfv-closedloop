@@ -306,7 +306,6 @@ void closedLoop() {
         
         // Calculate new target angle
         float newTargetAngle = channel.targetAngle + deltaAngle;
-        float oldTargetAngle = channel.targetAngle;
         newTargetAngle = constrainAngle(newTargetAngle);
         
         // Command stepper motor

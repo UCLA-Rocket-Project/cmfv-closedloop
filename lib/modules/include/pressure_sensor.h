@@ -3,34 +3,31 @@
 
 // Sensor validation results
 enum class SensorStatus {
-    OK_BOTH,
+    OK_ALL,
     ONE_ILLOGICAL,
     TWO_ILLOGICAL
+#ifdef USE_3_PTS
+    , THREE_ILLOGICAL
+#endif
 };
 
 class PressureSensor {
 public:
     PressureSensor();
     
-    // Validate two pressure sensor readings and return status and chosen pressure
-    SensorStatus validateTwoSensors(float P1, float P2, float& chosenPressure);
-    
+    // Validate pressure sensor readings and return status and chosen pressure
+#ifdef USE_3_PTS
+    SensorStatus validateSensors(float P1, float P2, float P3, float& chosenPressure);
+#endif
+    SensorStatus validateSensors(float P1, float P2, float& chosenPressure); // In the 3-PT scenario, we use this if only 2 PTs are valid
+
     // Check if a single pressure reading is valid
     bool isPressureValid(float pressure);
-    
-    // Check if pressure jump is within acceptable limits
-    bool isJumpAcceptable(float currentPressure, float previousPressure);
-    
-    // Update previous readings for jump detection
-    void updatePreviousReadings(float P1, float P2);
     
     // Reset the consecutive fault counter
     void resetConsecutiveFaults();
     
 private:
-    float m_prevP1;
-    float m_prevP2;
-    bool m_firstReading;
     int m_consecutiveDifferenceFaults;
     float m_lastGoodPressure;
 };

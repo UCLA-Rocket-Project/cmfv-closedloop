@@ -56,14 +56,15 @@ bool readManifoldPressures(float& pressure) {
     }
     
     // Validate manifold pressures using the two sensors for this system
-    SensorStatus status = pressureSensor->validateTwoSensors(
-        pressureData.sensor1, pressureData.sensor2, pressure);
-    
-    // Update previous readings for jump detection
-    pressureSensor->updatePreviousReadings(pressureData.sensor1, pressureData.sensor2);
+    SensorStatus status = pressureSensor->validateSensors(
+        pressureData.sensor1, pressureData.sensor2, 
+#ifdef USE_3_PTS
+        pressureData.sensor3, 
+#endif
+        pressure);
     
     // Check if manifold has two illogical sensors
-    if (status == SensorStatus::TWO_ILLOGICAL) {
+    if (status == SensorStatus::TWO_ILLOGICAL || status == SensorStatus::THREE_ILLOGICAL) {
         faults.sensorFault = true;
         return false;
     }

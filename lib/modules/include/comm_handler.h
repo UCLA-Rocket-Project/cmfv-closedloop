@@ -28,6 +28,8 @@
  *  +--------+--------+--------+--------+
  *  |      Registered PT2 Reading       |
  *  +--------+--------+--------+--------+
+ * 
+ * If the build flag USE_3_PTS is defined, then we add an extra row at the end for the 3rd PT reading. 
  */
 
 #define MAGIC_START 0xadfb // NOTE: THIS IS LITTLE ENDIAN - WE SHOULD BE RECEIVING 0xfbad
@@ -62,6 +64,9 @@ typedef struct {
     float curIntError;
     float pt1Reading;
     float pt2Reading;
+#ifdef USE_3_PTS
+    float pt3Reading;
+#endif
 } telemetryPacket_t;
 
 typedef union {
@@ -81,6 +86,8 @@ typedef union {
  *  +--------+--------+--------+--------+
  *  |            PT2 Reading            |
  *  +--------+--------+--------+--------+
+ * 
+ * If the build flag USE_3_PTS is defined, then we add an extra row at the end for the 3rd PT reading. 
  */
 
 #define UPDTPKT_FLAGS_MPV_OPEN 0x1
@@ -96,6 +103,9 @@ typedef struct {
 
     float pt1Reading;
     float pt2Reading;
+#ifdef USE_3_PTS
+    float pt3Reading;
+#endif
 } pressureUpdatePacket_t;
 
 typedef union {
@@ -107,6 +117,9 @@ typedef union {
 struct PressureData {
     float sensor1;
     float sensor2;
+#ifdef USE_3_PTS
+    float sensor3;
+#endif
     bool valid;
     
     PressureData() : sensor1(0.0f), sensor2(0.0f), valid(false) {}
