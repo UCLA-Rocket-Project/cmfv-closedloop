@@ -7,8 +7,18 @@ PressureSensor::PressureSensor()
     : m_consecutiveDifferenceFaults(0), m_consecutiveInvalid{0} {}
 
 #ifdef USE_3_PTS
+
 SensorStatus PressureSensor::validateThreeSensors(float P1, float P2, float P3, float& chosenPressure) {
-    uint8_t ok = isPressureValid(P1) + (isPressureValid(P2) << 1) + (isPressureValid(P3) << 2);    
+    bool valid[SensorConfig::NUM_PTS] = { isPressureValid(P1), isPressureValid(P2), isPressureValid(P3) };
+    updateConsecInvalidity(valid);
+
+    if (m_consecutiveInvalid[0] > 0 && m_consecutiveInvalid[1] > 0 && m_consecutiveInvalid[2] > 0 &&
+            (m_consecutiveInvalid[0] < SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD ||
+             m_consecutiveInvalid[1] < SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD || 
+             m_consecutiveInvalid[2] < SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD))
+        return SensorStatus::PENDING_FAULT;
+
+    uint8_t ok = valid[0] + (valid[1] << 1) + (valid[2] << 2);    
     
     // All PT readings are invalid
     if (ok == 0) {
@@ -41,38 +51,43 @@ SensorStatus PressureSensor::validateThreeSensors(float P1, float P2, float P3, 
                 if (fabs(P[i] - P[j]) > SensorConfig::PAIR_DIFFERENCE_THRESHOLD) {
                     m_consecutiveDifferenceFaults++;
 
-                    // Only trigger fault after consecutive threshold is reached
-                    if (m_consecutiveDifferenceFaults >= SensorConfig::PAIR_DIFFERENCE_CONSECUTIVE_COUNT) {
-                        chosenPressure = 0.0f;
-                        return SensorStatus::TWO_ILLOGICAL;
-                    } else {
-                        chosenPressure = m_lastGoodPressure;
-                        return SensorStatus::OK_ALL;
-                    }
+                    // int k = 3 - i - j;
+                    // bool close_to_i = fabs(P[k] - P[i]) <= SensorConfig::PAIR_DIFFERENCE_THRESHOLD;
+                    // bool close_to_j = fabs(P[k] - P[j]) <= SensorConfig::PAIR_DIFFERENCE_THRESHOLD;
+
+                    // if (close_to_i || close_to_j) {
+                    //     chosenPressure = close_to_i ? (P[k] + P[i])/2 : (P[k] + P[j])/2;
+                    //     return SensorStatus::TWO_ILLOGICAL;
+                    // }
+
+                    // We return THREE_ILLOGICAL even though it is ambiguous, so that we go into an error
+                    // state. 
+                    return m_consecutiveDifferenceFaults >= SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD ? 
+                        SensorStatus::THREE_ILLOGICAL : SensorStatus::PENDING_FAULT;
                 }
             }
         }
 
         // Return the median
         chosenPressure = ((P1-P2)*(P2-P3) > 0 ? P2 : ((P1-P2)*(P1-P3) < 0 ? P1 : P3));
-        m_consecutiveDifferenceFaults = 0;  
-        m_lastGoodPressure = chosenPressure;
+        m_consecutiveDifferenceFaults = 0;
         return SensorStatus::OK_ALL;
     }
     
     // If two sensors are valid, then we use validateTwoSensors on it
     switch (ok) {
         case 3:
-            return validateSensors(P1, P2, chosenPressure);
+            return processTwoValidSensors(P1, P2, chosenPressure);
         case 5:
-            return validateSensors(P1, P3, chosenPressure);
+            return processTwoValidSensors(P1, P3, chosenPressure);
         case 6:
-            return validateSensors(P2, P3, chosenPressure);
+            return processTwoValidSensors(P2, P3, chosenPressure);
         default:
             return SensorStatus::THREE_ILLOGICAL; // Should never get here
     }
 }
-#endif
+
+#else
 
 SensorStatus PressureSensor::validateTwoSensors(float P1, float P2, float& chosenPressure) {
     bool valid[SensorConfig::NUM_PTS] = { isPressureValid(P1), isPressureValid(P2) };
@@ -87,28 +102,37 @@ SensorStatus PressureSensor::validateTwoSensors(float P1, float P2, float& chose
     
     if (!ok1 && !ok2) return SensorStatus::TWO_ILLOGICAL;
     
-    if (ok1 && ok2) {
-        float difference = fabs(P1 - P2);
-
-        if (difference <= SensorConfig::PAIR_DIFFERENCE_THRESHOLD) {
-            chosenPressure = (P1 + P2) * 0.5f;
-            m_consecutiveDifferenceFaults = 0;  
-            return SensorStatus::OK_ALL;
-        } else {
-            m_consecutiveDifferenceFaults++;
-            
-            // Only trigger fault after consecutive threshold is reached
-            if (m_consecutiveDifferenceFaults >= SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD)
-                return SensorStatus::TWO_ILLOGICAL;
-            else
-                return SensorStatus::PENDING_FAULT;
-        }
-    }
+    // In the 3-PT case, only this block is called
+    if (ok1 && ok2) return processTwoValidSensors(P1, P2, chosenPressure);
     
     // Exactly one sensor is valid
     chosenPressure = ok1 ? P1 : P2;
     m_consecutiveDifferenceFaults = 0;
     return SensorStatus::ONE_ILLOGICAL;
+}
+
+#endif
+
+SensorStatus PressureSensor::processTwoValidSensors(float P1, float P2, float& chosenPressure) {
+    float difference = fabs(P1 - P2);
+
+    if (difference <= SensorConfig::PAIR_DIFFERENCE_THRESHOLD) {
+        chosenPressure = (P1 + P2) * 0.5f;
+        m_consecutiveDifferenceFaults = 0;  
+        return SensorStatus::OK_ALL;
+    } else {
+        m_consecutiveDifferenceFaults++;
+        
+        // Only trigger fault after consecutive threshold is reached
+        if (m_consecutiveDifferenceFaults >= SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD)
+#ifdef USE_3_PTS
+            return SensorStatus::THREE_ILLOGICAL;
+#else
+            return SensorStatus::TWO_ILLOGICAL;
+#endif
+        else
+            return SensorStatus::PENDING_FAULT;
+    }
 }
 
 bool PressureSensor::isPressureValid(float pressure) {

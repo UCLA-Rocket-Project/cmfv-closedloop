@@ -154,7 +154,11 @@ struct MotorControlConfig {
 // ================================
 
 struct SensorConfig {
+#ifdef USE_3_PTS
+    static constexpr int NUM_PTS = 3;
+#else
     static constexpr int NUM_PTS = 2;
+#endif
 
     // Sensor validation limits
     static constexpr float P_MIN = -20.0f;                      // Minimum valid pressure (PSI)

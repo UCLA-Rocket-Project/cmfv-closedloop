@@ -9,6 +9,8 @@
 
 /*** TESTS FOR 2 PT SETUP ***/
 
+#ifndef USE_3_PTS
+
 /* Test 1: Both pressure sensors read illogical values. */
 void test_pressure_validation_two_sensors_1() {
     float pressureReturned;
@@ -97,6 +99,8 @@ void test_pressure_validation_two_sensors_4() {
     TEST_ASSERT_EQUAL_FLOAT(pressureExpected, pressureReturned);
 }
 
+#endif
+
 /*** TESTS FOR 3 PT SETUP ***/
 
 #ifdef USE_3_PTS
@@ -105,10 +109,26 @@ void test_pressure_validation_two_sensors_4() {
 void test_pressure_validation_three_sensors_1() {
     float pressureReturned;
     PressureSensor ps;
-    SensorStatus ss = ps.validateSensors(SensorConfig::P_MIN - 1, SensorConfig::P_MAX + 1, SensorConfig::P_MAX + 1, pressureReturned);
+    SensorStatus ss;
 
+    // Register N - 1 invalid PT readings for all 3 PTs
+    for (int i = 1; i < SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD; i++) {
+        ss = ps.validateThreeSensors(SensorConfig::P_MIN - 1, SensorConfig::P_MAX + 1, SensorConfig::P_MAX + 1, pressureReturned);
+        TEST_ASSERT_EQUAL(SensorStatus::PENDING_FAULT, ss);
+    }
+
+    // Register a valid reading for all 3 PTs
+    ss = ps.validateThreeSensors(SensorConfig::P_MIN, SensorConfig::P_MIN, SensorConfig::P_MIN, pressureReturned);
+    TEST_ASSERT_EQUAL(SensorStatus::OK_ALL, ss);
+    TEST_ASSERT_EQUAL_FLOAT(SensorConfig::P_MIN, pressureReturned);
+
+    // We should need to register N invalid PT readings for all 3 PTs to get THREE_ILLOGICAL
+    for (int i = 1; i < SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD; i++) {
+        ss = ps.validateThreeSensors(SensorConfig::P_MIN - 1, SensorConfig::P_MIN - 1, SensorConfig::P_MAX + 1, pressureReturned);
+        TEST_ASSERT_EQUAL(SensorStatus::PENDING_FAULT, ss);
+    }
+    ss = ps.validateThreeSensors(SensorConfig::P_MIN - 1, SensorConfig::P_MAX + 1, SensorConfig::P_MAX + 1, pressureReturned);
     TEST_ASSERT_EQUAL(SensorStatus::THREE_ILLOGICAL, ss);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, pressureReturned);
 }
 
 /* Test 2: All 3 pressure sensors read logical values, but consecutively, a pair always differs by too much. This should occur for a certain number of times before the error is registered. */
@@ -119,44 +139,64 @@ void test_pressure_validation_three_sensors_2() {
         return;
 
     // Register N - 1 sensor differences which exceed the threshold
-    for (int i = 1; i < SensorConfig::PAIR_DIFFERENCE_CONSECUTIVE_COUNT; i++) {
+    for (int i = 1; i < SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD; i++) {
         SensorStatus ss = i % 2 ?
-            ps.validateSensors(SensorConfig::P_MIN, SensorConfig::P_MAX, SensorConfig::P_MAX, pressureReturned) :
-            ps.validateSensors(SensorConfig::P_MAX, SensorConfig::P_MIN, SensorConfig::P_MAX, pressureReturned);
-        TEST_ASSERT_EQUAL(SensorStatus::OK_ALL, ss);
+            ps.validateThreeSensors(SensorConfig::P_MIN, SensorConfig::P_MAX, SensorConfig::P_MAX, pressureReturned) :
+            ps.validateThreeSensors(SensorConfig::P_MAX, SensorConfig::P_MIN, SensorConfig::P_MAX, pressureReturned);
+        TEST_ASSERT_EQUAL(SensorStatus::PENDING_FAULT, ss);
     }
 
     // Register a sensor difference which does not exceed the threshold
     float p_middle = (SensorConfig::P_MIN + SensorConfig::P_MAX) / 2;
-    SensorStatus ss = ps.validateSensors(p_middle, p_middle, p_middle, pressureReturned);
+    SensorStatus ss = ps.validateThreeSensors(p_middle, p_middle, p_middle, pressureReturned);
     TEST_ASSERT_EQUAL(SensorStatus::OK_ALL, ss);
     TEST_ASSERT_EQUAL_FLOAT(p_middle, pressureReturned);
 
-    // We should need to register N - 1 sensor differences which exceed the threshold before it errors
-    for (int i = 1; i < SensorConfig::PAIR_DIFFERENCE_CONSECUTIVE_COUNT; i++) {
+    // We should need to register N sensor differences which exceed the threshold before it errors
+    for (int i = 1; i < SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD; i++) {
         SensorStatus ss = i % 2 ?
-            ps.validateSensors(SensorConfig::P_MIN, SensorConfig::P_MAX, SensorConfig::P_MAX, pressureReturned) :
-            ps.validateSensors(SensorConfig::P_MAX, SensorConfig::P_MIN, SensorConfig::P_MAX, pressureReturned);
-        TEST_ASSERT_EQUAL(SensorStatus::OK_ALL, ss);
-        TEST_ASSERT_EQUAL_FLOAT(p_middle, pressureReturned);
+            ps.validateThreeSensors(SensorConfig::P_MIN, SensorConfig::P_MAX, SensorConfig::P_MAX, pressureReturned) :
+            ps.validateThreeSensors(SensorConfig::P_MAX, SensorConfig::P_MIN, SensorConfig::P_MAX, pressureReturned);
+        TEST_ASSERT_EQUAL(SensorStatus::PENDING_FAULT, ss);
     }
 
-    ss = ps.validateSensors(SensorConfig::P_MAX, SensorConfig::P_MIN, SensorConfig::P_MAX, pressureReturned);
-    TEST_ASSERT_EQUAL(SensorStatus::TWO_ILLOGICAL, ss);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, pressureReturned);
+    ss = ps.validateThreeSensors(SensorConfig::P_MAX, SensorConfig::P_MIN, SensorConfig::P_MAX, pressureReturned);
+    TEST_ASSERT_EQUAL(SensorStatus::THREE_ILLOGICAL, ss);
+}
+
+/* Test X: All 3 pressure sensors read a logical value; the median should be returned. */
+void test_pressure_validation_three_sensors_X() {
+    float pressureReturned;
+    PressureSensor ps;
+    SensorStatus ss;
+
+    if (SensorConfig::P_MAX - SensorConfig::P_MIN < SensorConfig::PAIR_DIFFERENCE_THRESHOLD) {
+        float p_middle = (SensorConfig::P_MIN + SensorConfig::P_MAX) / 2;
+        ss = ps.validateThreeSensors(SensorConfig::P_MIN, p_middle, SensorConfig::P_MAX, pressureReturned);
+        TEST_ASSERT_EQUAL(SensorStatus::OK_ALL, ss);
+        TEST_ASSERT_EQUAL(p_middle, pressureReturned);
+    } else {
+        ss = ps.validateThreeSensors(SensorConfig::P_MIN,
+                                     SensorConfig::P_MIN + SensorConfig::PAIR_DIFFERENCE_THRESHOLD/2,
+                                     SensorConfig::P_MIN + SensorConfig::PAIR_DIFFERENCE_THRESHOLD, pressureReturned);
+        TEST_ASSERT_EQUAL(SensorStatus::OK_ALL, ss);
+        TEST_ASSERT_EQUAL(SensorConfig::P_MIN + SensorConfig::PAIR_DIFFERENCE_THRESHOLD/2, pressureReturned);
+    }
 }
 
 #endif
 
 void run_all_pressure_sensor_tests() {
     UnitySetTestFile(__FILE__);
+#ifdef USE_3_PTS
+    RUN_TEST(test_pressure_validation_three_sensors_1);
+    RUN_TEST(test_pressure_validation_three_sensors_2);
+    RUN_TEST(test_pressure_validation_three_sensors_X);
+#else
     RUN_TEST(test_pressure_validation_two_sensors_1);
     RUN_TEST(test_pressure_validation_two_sensors_2);
     RUN_TEST(test_pressure_validation_two_sensors_3);
     RUN_TEST(test_pressure_validation_two_sensors_4);
-#ifdef USE_3_PTS
-    RUN_TEST(test_pressure_validation_three_sensors_1);
-    RUN_TEST(test_pressure_validation_three_sensors_2);
 #endif
 }
 

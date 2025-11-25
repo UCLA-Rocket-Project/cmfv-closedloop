@@ -21,8 +21,10 @@ public:
     // Validate pressure sensor readings and return status and chosen pressure
 #ifdef USE_3_PTS
     SensorStatus validateThreeSensors(float P1, float P2, float P3, float& chosenPressure);
+#else
+    SensorStatus validateTwoSensors(float P1, float P2, float& chosenPressure);
 #endif
-    SensorStatus validateTwoSensors(float P1, float P2, float& chosenPressure); // In the 3-PT scenario, we use this if only 2 PTs are valid
+    SensorStatus processTwoValidSensors(float P1, float P2, float& chosenPressure);
 
     // Check if a single pressure reading is valid
     bool isPressureValid(float pressure);

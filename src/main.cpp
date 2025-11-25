@@ -273,7 +273,11 @@ void closedLoop() {
     // Read pressure sensors for this manifold
     float pressure;
     switch (readManifoldPressures(pressure)) {
+    #ifdef USE_3_PTS
+        case SensorStatus::THREE_ILLOGICAL:
+    #else
         case SensorStatus::TWO_ILLOGICAL:
+    #endif
             faults.sensorFault = true;
             systemState.changeStateTo(SystemStateEnum::FORCED_OPEN_LOOP);
             return;
