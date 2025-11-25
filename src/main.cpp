@@ -262,26 +262,27 @@ void openLoopInit() {
 }
 
 void closedLoop() {
-    // Calculate actual time step for this control loop iteration
+    // Calculate time step for this control loop iteration
     unsigned long now = millis();
     float dt = (now - systemState.lastControlTime) / 1000.0f; 
     systemState.lastControlTime = now;
-
-    // Minimum dt to avoid division by zero or unrealistic values
-    if (dt <= 0.0f || dt > 10.0f) {
+    if (dt <= 0.0f || dt > 10.0f) { // Minimum dt to avoid division by zero or unrealistic values
         dt = TimingConfig::CONTROL_PERIOD_S; // Fallback
     }
     
     // Read pressure sensors for this manifold
     float pressure;
-    if (!readManifoldPressures(pressure)) {
-        // Check if sensor fault or pending fault
-        if (faults.sensorFault) {
+    switch (readManifoldPressures(pressure)) {
+        case SensorStatus::TWO_ILLOGICAL:
+            faults.sensorFault = true;
             systemState.changeStateTo(SystemStateEnum::FORCED_OPEN_LOOP);
-        }
-        return;
+            return;
+        case SensorStatus::PENDING_FAULT:
+            return;
+        default: break;
     }
     
+    // Redband check (occurs if we are past the redband timeout)
     if (redBandCheck || (millis() - systemState.enterClosedLoopTime) > TimingConfig::REDBAND_TIMEOUT * 1000UL){
         redBandCheck = true;
         if (!checkRedBand(pressure)){
@@ -290,9 +291,7 @@ void closedLoop() {
             return;
         }
     }
-
     
-    // Calculate error for this manifold
     float error = ControllerConfig::TARGET_PRESSURE_PSI - pressure;
     bool inTolerance = fabs(error) <= SensorConfig::PRESSURE_TOLERANCE;
 
@@ -307,7 +306,6 @@ void closedLoop() {
         
         // Calculate new target angle
         float newTargetAngle = channel.targetAngle + deltaAngle;
-        float oldTargetAngle = channel.targetAngle;
         newTargetAngle = constrainAngle(newTargetAngle);
         
         // Command stepper motor
@@ -331,7 +329,6 @@ void closedLoop() {
         channel.currentAngle = angleAfterMove;
 
 #ifdef USE_OSCILLATION_DETECTOR
-        // The check for whether the move is within tolerance is removed for now, placeholder in case we want to add back.
         // Check for oscillations
         if (controller->getOscillationDetector().checkOscillation(error, millis())) {
             faults.oscillationDetected = true;

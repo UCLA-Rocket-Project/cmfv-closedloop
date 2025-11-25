@@ -154,12 +154,13 @@ struct MotorControlConfig {
 // ================================
 
 struct SensorConfig {
+    static constexpr int NUM_PTS = 2;
+
     // Sensor validation limits
-    static constexpr float P_MIN = -20.0f;              // Minimum valid pressure (PSI)
-    static constexpr float P_MAX = 1000.0f;           // Maximum valid pressure (PSI)
-    // static constexpr float MAX_PRESSURE_JUMP = 200.0f; // Max jump between readings (PSI)
-    static constexpr float PAIR_DIFFERENCE_THRESHOLD = 25.0f; // Max difference between PT1/PT2
-    static constexpr int PAIR_DIFFERENCE_CONSECUTIVE_COUNT = 5; // Number of consecutive faults before triggering
+    static constexpr float P_MIN = -20.0f;                      // Minimum valid pressure (PSI)
+    static constexpr float P_MAX = 1000.0f;                     // Maximum valid pressure (PSI)
+    static constexpr float PAIR_DIFFERENCE_THRESHOLD = 25.0f;   // Max difference between PT1/PT2
+    static constexpr int CONSEC_BEFORE_ERR_THRESHOLD = 5;       // Number of consecutive faults before triggering
     
     // Control tolerance
     static constexpr float PRESSURE_TOLERANCE = 5.0f; // Acceptable pressure error (PSI)
@@ -182,7 +183,7 @@ struct FDIRConfig {
     // Threshold constants for sign change detection
     static constexpr int CONSEC_SAME_SIGN_THRESHOLD = 5;        // No. of consecutive readings of a particular magnitude of a
                                                                 // different sign for us to register sign change
-    static constexpr float ERROR_MAGNITUDE_THRESHOLD = 1.0f;  // Minimum error magnitude to count error
+    static constexpr float ERROR_MAGNITUDE_THRESHOLD = 1.0f;    // Minimum error magnitude to count error
 };
 
 // ================================

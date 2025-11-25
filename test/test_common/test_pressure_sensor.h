@@ -11,22 +11,54 @@
 void test_pressure_validation_1() {
     float pressureReturned;
     PressureSensor ps;
-    SensorStatus ss = ps.validateTwoSensors(SensorConfig::P_MIN - 1, SensorConfig::P_MAX + 1, pressureReturned);
+    SensorStatus ss;
 
+    // Register N - 1 invalid PT readings for both PTs
+    for (int i = 1; i < SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD; i++) {
+        ss = ps.validateTwoSensors(SensorConfig::P_MIN - 1, SensorConfig::P_MAX + 1, pressureReturned);
+        TEST_ASSERT_EQUAL(SensorStatus::PENDING_FAULT, ss);
+    }
+
+    // Register a valid reading for both PTs
+    ss = ps.validateTwoSensors(SensorConfig::P_MIN, SensorConfig::P_MIN, pressureReturned);
+    TEST_ASSERT_EQUAL(SensorStatus::OK_BOTH, ss);
+    TEST_ASSERT_EQUAL_FLOAT(SensorConfig::P_MIN, pressureReturned);
+
+    // We should need to register N invalid PT readings for both PTs to get TWO_ILLOGICAL
+    for (int i = 1; i < SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD; i++) {
+        ss = ps.validateTwoSensors(SensorConfig::P_MIN - 1, SensorConfig::P_MAX + 1, pressureReturned);
+        TEST_ASSERT_EQUAL(SensorStatus::PENDING_FAULT, ss);
+    }
+    ss = ps.validateTwoSensors(SensorConfig::P_MIN - 1, SensorConfig::P_MAX + 1, pressureReturned);
     TEST_ASSERT_EQUAL(SensorStatus::TWO_ILLOGICAL, ss);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, pressureReturned);
 }
 
 /* Test 2: Both pressure sensors read logical values, but differ by too much. */
 void test_pressure_validation_2() {
     float pressureReturned;
     PressureSensor ps;
-    SensorStatus ss = ps.validateTwoSensors(SensorConfig::P_MIN, SensorConfig::P_MAX, pressureReturned);
+    SensorStatus ss;
     if (SensorConfig::P_MAX - SensorConfig::P_MIN < SensorConfig::PAIR_DIFFERENCE_THRESHOLD)
         return;
 
+    // Register N - 1 sensor differences which exceed the threshold
+    for (int i = 1; i < SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD; i++) {
+        ss = ps.validateTwoSensors(SensorConfig::P_MIN, SensorConfig::P_MAX, pressureReturned);
+        TEST_ASSERT_EQUAL(SensorStatus::PENDING_FAULT, ss);
+    }
+
+    // Register a sensor difference which does not exceed the threshold
+    ss = ps.validateTwoSensors(SensorConfig::P_MIN, SensorConfig::P_MIN, pressureReturned);
+    TEST_ASSERT_EQUAL(SensorStatus::OK_BOTH, ss);
+    TEST_ASSERT_EQUAL_FLOAT(SensorConfig::P_MIN, pressureReturned);
+
+    // We should need to register N sensor differences which exceed the threshold to get TWO_ILLOGICAL
+    for (int i = 1; i < SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD; i++) {
+        ss = ps.validateTwoSensors(SensorConfig::P_MIN, SensorConfig::P_MAX, pressureReturned);
+        TEST_ASSERT_EQUAL(SensorStatus::PENDING_FAULT, ss);
+    }
+    ss = ps.validateTwoSensors(SensorConfig::P_MIN, SensorConfig::P_MAX, pressureReturned);
     TEST_ASSERT_EQUAL(SensorStatus::TWO_ILLOGICAL, ss);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, pressureReturned);
 }
 
 /* Test 3: Only one pressure sensor reads a logical value; the other, illogical. */

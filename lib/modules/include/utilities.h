@@ -23,7 +23,7 @@ bool isAngleValid(float angle);
 bool isEncoderHealthy();
 
 // System utility functions
-bool readManifoldPressures(float& pressure);
+SensorStatus readManifoldPressures(float& pressure);
 void setMPV(bool open); // This sets whether we should deactuate (close) MPV, as a signal sent to the Pi. We do not directly control MPV
 void setMPVState(bool state); // This sets whether we have detected MPV
 bool getMPVState();

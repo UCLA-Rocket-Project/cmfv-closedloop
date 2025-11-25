@@ -59,9 +59,6 @@ bool CommHandler::parsePressureUpdatePacket() {
         return false;
 
     // Update pressures
-    if (!isValidPressure(m_inputBuffer.data.pt1Reading) ||
-        !isValidPressure(m_inputBuffer.data.pt2Reading))
-        return false;
     m_pressureData.sensor1 = m_inputBuffer.data.pt1Reading;
     m_pressureData.sensor2 = m_inputBuffer.data.pt2Reading;
 
@@ -114,13 +111,6 @@ void CommHandler::sendTelemetry(SystemStateEnum state, float motorAngle, float d
     m_outputBuffer.data._checksum = calcChecksum(m_outputBuffer.bytes + 4, TELPKT_SIZE - 4);
 
     Serial.write(m_outputBuffer.bytes, TELPKT_SIZE);
-    
-}
-
-bool CommHandler::isValidPressure(float p) {
-    if (p < SensorConfig::P_MIN || p > SensorConfig::P_MAX)
-        return false;
-    return true;
 }
 
 void CommHandler::updateNumConsecInvalidPUP(bool valid) {

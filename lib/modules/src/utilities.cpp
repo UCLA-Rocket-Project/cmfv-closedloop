@@ -48,32 +48,12 @@ bool isAngleValid(float angle) {
 }
 
 // System utility functions
-bool readManifoldPressures(float& pressure) {
+SensorStatus readManifoldPressures(float& pressure) {
     PressureData pressureData = commHandler->getPressureData();
     
-    if (!pressureData.valid) {
-        return false;
-    }
-    
     // Validate manifold pressures using the two sensors for this system
-    SensorStatus status = pressureSensor->validateTwoSensors(
+    return pressureSensor->validateTwoSensors(
         pressureData.sensor1, pressureData.sensor2, pressure);
-    
-    // Update previous readings for jump detection
-    pressureSensor->updatePreviousReadings(pressureData.sensor1, pressureData.sensor2);
-    
-    // Check if manifold has two illogical sensors
-    if (status == SensorStatus::TWO_ILLOGICAL) {
-        faults.sensorFault = true;
-        return false;
-    }
-    
-    // Check if sensors are pending fault
-    if (status == SensorStatus::PENDING_FAULT) {
-        return false; 
-    }
-    
-    return true;
 }
 
 bool isManualAbortPressed() {
