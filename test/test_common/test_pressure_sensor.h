@@ -23,7 +23,7 @@ void test_pressure_validation_two_sensors_1() {
 
     // Register a valid reading for both PTs
     ss = ps.validateTwoSensors(SensorConfig::P_MIN, SensorConfig::P_MIN, pressureReturned);
-    TEST_ASSERT_EQUAL(SensorStatus::OK_BOTH, ss);
+    TEST_ASSERT_EQUAL(SensorStatus::OK_ALL, ss);
     TEST_ASSERT_EQUAL_FLOAT(SensorConfig::P_MIN, pressureReturned);
 
     // We should need to register N invalid PT readings for both PTs to get TWO_ILLOGICAL
@@ -51,7 +51,7 @@ void test_pressure_validation_two_sensors_2() {
 
     // Register a sensor difference which does not exceed the threshold
     ss = ps.validateTwoSensors(SensorConfig::P_MIN, SensorConfig::P_MIN, pressureReturned);
-    TEST_ASSERT_EQUAL(SensorStatus::OK_BOTH, ss);
+    TEST_ASSERT_EQUAL(SensorStatus::OK_ALL, ss);
     TEST_ASSERT_EQUAL_FLOAT(SensorConfig::P_MIN, pressureReturned);
 
     // We should need to register N sensor differences which exceed the threshold to get TWO_ILLOGICAL
@@ -67,12 +67,12 @@ void test_pressure_validation_two_sensors_2() {
 void test_pressure_validation_two_sensors_3() {
     float pressureReturned;
     PressureSensor ps;
-    SensorStatus ss1 = ps.validateSensors(SensorConfig::P_MIN, SensorConfig::P_MAX + 1, pressureReturned);
+    SensorStatus ss1 = ps.validateTwoSensors(SensorConfig::P_MIN, SensorConfig::P_MAX + 1, pressureReturned);
 
     TEST_ASSERT_EQUAL(SensorStatus::ONE_ILLOGICAL, ss1);
     TEST_ASSERT_EQUAL_FLOAT(SensorConfig::P_MIN, pressureReturned);
 
-    SensorStatus ss2 = ps.validateSensors(SensorConfig::P_MIN - 1, SensorConfig::P_MAX, pressureReturned);
+    SensorStatus ss2 = ps.validateTwoSensors(SensorConfig::P_MIN - 1, SensorConfig::P_MAX, pressureReturned);
     
     TEST_ASSERT_EQUAL(SensorStatus::ONE_ILLOGICAL, ss2);
     TEST_ASSERT_EQUAL_FLOAT(SensorConfig::P_MAX, pressureReturned);
@@ -91,7 +91,7 @@ void test_pressure_validation_two_sensors_4() {
                 SensorConfig::P_MIN + SensorConfig::PAIR_DIFFERENCE_THRESHOLD * 0.5f; 
 
     PressureSensor ps;
-    SensorStatus ss = ps.validateSensors(SensorConfig::P_MIN, pressureHigh, pressureReturned);
+    SensorStatus ss = ps.validateTwoSensors(SensorConfig::P_MIN, pressureHigh, pressureReturned);
 
     TEST_ASSERT_EQUAL(SensorStatus::OK_ALL, ss);
     TEST_ASSERT_EQUAL_FLOAT(pressureExpected, pressureReturned);

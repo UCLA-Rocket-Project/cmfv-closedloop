@@ -6,6 +6,7 @@
 PressureSensor::PressureSensor() 
     : m_consecutiveDifferenceFaults(0), m_consecutiveInvalid{0} {}
 
+#ifdef USE_3_PTS
 SensorStatus PressureSensor::validateThreeSensors(float P1, float P2, float P3, float& chosenPressure) {
     uint8_t ok = isPressureValid(P1) + (isPressureValid(P2) << 1) + (isPressureValid(P3) << 2);    
     
@@ -71,15 +72,11 @@ SensorStatus PressureSensor::validateThreeSensors(float P1, float P2, float P3, 
             return SensorStatus::THREE_ILLOGICAL; // Should never get here
     }
 }
+#endif
 
 SensorStatus PressureSensor::validateTwoSensors(float P1, float P2, float& chosenPressure) {
     bool valid[SensorConfig::NUM_PTS] = { isPressureValid(P1), isPressureValid(P2) };
     updateConsecInvalidity(valid);
-
-
-SensorStatus PressureSensor::validateSensors(float P1, float P2, float& chosenPressure) {
-    bool ok1 = isPressureValid(P1);
-    bool ok2 = isPressureValid(P2);
     
     if (m_consecutiveInvalid[0] > 0 && m_consecutiveInvalid[1] > 0 && 
             (m_consecutiveInvalid[0] < SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD ||
