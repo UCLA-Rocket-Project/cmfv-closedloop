@@ -51,9 +51,14 @@ bool isAngleValid(float angle) {
 SensorStatus readManifoldPressures(float& pressure) {
     PressureData pressureData = commHandler->getPressureData();
     
-    // Validate manifold pressures using the two sensors for this system
+    // Validate manifold pressures using the two / three sensors for this system
+#ifdef USE_3_PTS
+    return pressureSensor->validateThreeSensors(
+        pressureData.sensor1, pressureData.sensor2, pressureData.sensor3, pressure);
+#else
     return pressureSensor->validateTwoSensors(
         pressureData.sensor1, pressureData.sensor2, pressure);
+#endif
 }
 
 bool isManualAbortPressed() {

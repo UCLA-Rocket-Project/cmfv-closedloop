@@ -5,19 +5,24 @@
 
 // Sensor validation results
 enum class SensorStatus {
-    OK_BOTH,
+    OK_ALL,
+    PENDING_FAULT,
     ONE_ILLOGICAL,
-    TWO_ILLOGICAL,
-    PENDING_FAULT
+    TWO_ILLOGICAL
+#ifdef USE_3_PTS
+    , THREE_ILLOGICAL
+#endif
 };
 
 class PressureSensor {
 public:
     PressureSensor();
     
-    // Validate two pressure sensor readings and return status and chosen pressure
-    SensorStatus validateTwoSensors(float P1, float P2, float& chosenPressure);
-    
+    // Validate pressure sensor readings and return status and chosen pressure
+    SensorStatus validateThreeSensors(float P1, float P2, float P3, float& chosenPressure);
+    SensorStatus validateTwoSensors(float P1, float P2, float& chosenPressure); // In the 3-PT scenario, we use this if only 2 PTs are valid
+
+    // Check if a single pressure reading is valid
     bool isPressureValid(float pressure);
     void updateConsecInvalidity(bool* valid);
     

@@ -61,6 +61,9 @@ bool CommHandler::parsePressureUpdatePacket() {
     // Update pressures
     m_pressureData.sensor1 = m_inputBuffer.data.pt1Reading;
     m_pressureData.sensor2 = m_inputBuffer.data.pt2Reading;
+#ifdef USE_3_PTS
+    m_pressureData.sensor3 = m_inputBuffer.data.pt3Reading;
+#endif
 
     // Update MPV Open/Close state
     MPV_STATE = (m_inputBuffer.data.flags & UPDTPKT_FLAGS_MPV_OPEN) != 0;
@@ -106,6 +109,9 @@ void CommHandler::sendTelemetry(SystemStateEnum state, float motorAngle, float d
     m_outputBuffer.data.curIntError = pidIntegralError;
     m_outputBuffer.data.pt1Reading = m_pressureData.sensor1;
     m_outputBuffer.data.pt2Reading = m_pressureData.sensor2;
+#ifdef USE_3_PTS
+    m_outputBuffer.data.pt3Reading = m_pressureData.sensor3;
+#endif
 
     // Calculate CRC16 checksum
     m_outputBuffer.data._checksum = calcChecksum(m_outputBuffer.bytes + 4, TELPKT_SIZE - 4);
