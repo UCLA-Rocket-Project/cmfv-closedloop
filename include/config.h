@@ -17,6 +17,9 @@
 // Open Loop toggle
 #define OPEN_LOOP_MODE false
 
+// Use 3 PTs (Set to false to use 2 PTs)
+#define USE_3_PTS true
+
 // ================================
 // UTILITY FUNCTIONS
 // ================================
@@ -154,16 +157,17 @@ struct MotorControlConfig {
 // ================================
 
 struct SensorConfig {
-#ifdef USE_3_PTS
+#if USE_3_PTS
     static constexpr int NUM_PTS = 3;
+    static constexpr float PAIR_DIFFERENCE_THRESHOLD = 35.0f;   // Max difference between PT1/PT2
 #else
     static constexpr int NUM_PTS = 2;
+    static constexpr float PAIR_DIFFERENCE_THRESHOLD = 25.0f;   // Max difference between PT1/PT2
 #endif
 
     // Sensor validation limits
     static constexpr float P_MIN = -20.0f;                      // Minimum valid pressure (PSI)
     static constexpr float P_MAX = 1000.0f;                     // Maximum valid pressure (PSI)
-    static constexpr float PAIR_DIFFERENCE_THRESHOLD = 25.0f;   // Max difference between PT1/PT2
     static constexpr int CONSEC_BEFORE_ERR_THRESHOLD = 5;       // Number of consecutive faults before triggering
     
     // Control tolerance

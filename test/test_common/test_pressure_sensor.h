@@ -9,7 +9,7 @@
 
 /*** TESTS FOR 2 PT SETUP ***/
 
-#ifndef USE_3_PTS
+#if !USE_3_PTS
 
 /* Test 1: Both pressure sensors read illogical values. */
 void test_pressure_validation_two_sensors_1() {
@@ -103,7 +103,7 @@ void test_pressure_validation_two_sensors_4() {
 
 /*** TESTS FOR 3 PT SETUP ***/
 
-#ifdef USE_3_PTS
+#if USE_3_PTS
 
 /* Test 1: All 3 sensors read illogical values. */
 void test_pressure_validation_three_sensors_1() {
@@ -188,7 +188,7 @@ void test_pressure_validation_three_sensors_X() {
 
 void run_all_pressure_sensor_tests() {
     UnitySetTestFile(__FILE__);
-#ifdef USE_3_PTS
+#if USE_3_PTS
     RUN_TEST(test_pressure_validation_three_sensors_1);
     RUN_TEST(test_pressure_validation_three_sensors_2);
     RUN_TEST(test_pressure_validation_three_sensors_X);

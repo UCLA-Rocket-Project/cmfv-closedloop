@@ -273,7 +273,7 @@ void closedLoop() {
     // Read pressure sensors for this manifold
     float pressure;
     switch (readManifoldPressures(pressure)) {
-    #ifdef USE_3_PTS
+    #if USE_3_PTS
         case SensorStatus::THREE_ILLOGICAL:
     #else
         case SensorStatus::TWO_ILLOGICAL:

@@ -48,6 +48,6 @@ PlatformIO uses the Unity testing framework for unit tests, which we use. See [t
 
 ## Credits
 
-This code was jointly developed by [Daniel Zhou](https://github.com/danieljz23) and [Teong Seng Tan](github.com/asdiml), Controls Leads of UCLA Rocket Project, Ares (2025-2026). 
+This code was jointly developed by [Daniel Zhou](https://github.com/danieljz23) and [Teong Seng Tan](https://github.com/asdiml), Controls Leads of UCLA Rocket Project, Ares (2025-2026). 
 
 The graphs and slides referenced in [Achievements](#achievements) were created by Michael Ferrell, Project Lead of UCLA Rocket Project, Ares (2025-2026). 

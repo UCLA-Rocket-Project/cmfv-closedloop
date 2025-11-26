@@ -32,7 +32,6 @@ void test_motor_move_fwd_ninety() {
 
     float targetAngle = oldAngle > 270.0f ? oldAngle - 270.0f : oldAngle + 90.0f;
     serviceSingleMotor(stepperDriver, oldAngle, targetAngle);
-    serviceSingleMotor(stepperDriver, getEncoderAngle(), targetAngle);
     float errDeg = fabs(getEncoderAngle() - targetAngle);
     TEST_ASSERT_LESS_THAN_FLOAT(MotorControlConfig::ANGLE_DEADBAND_DEG, errDeg);
 }
@@ -43,13 +42,8 @@ void test_motor_move_bck_ninety() {
 
     float targetAngle = oldAngle < 90.0f ? oldAngle + 270.0f : oldAngle - 90.0f;
     serviceSingleMotor(stepperDriver, oldAngle, targetAngle);
-    serviceSingleMotor(stepperDriver, getEncoderAngle(), targetAngle);
     float errDeg = fabs(getEncoderAngle() - targetAngle);
     TEST_ASSERT_LESS_THAN_FLOAT(MotorControlConfig::ANGLE_DEADBAND_DEG, errDeg);
-}
-
-void test_motor_move_fwd_ninety_with_5_degree_cap() {
-    
 }
 
 void setup() {

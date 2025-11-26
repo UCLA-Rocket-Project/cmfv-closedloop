@@ -52,7 +52,7 @@ SensorStatus readManifoldPressures(float& pressure) {
     PressureData pressureData = commHandler->getPressureData();
     
     // Validate manifold pressures using the two / three sensors for this system
-#ifdef USE_3_PTS
+#if USE_3_PTS
     return pressureSensor->validateThreeSensors(
         pressureData.sensor1, pressureData.sensor2, pressureData.sensor3, pressure);
 #else

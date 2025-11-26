@@ -10,6 +10,12 @@ Activates different constants for OCV / FCV based on whether it is true
 
 Dictates whether there will be any closed loop control. If true, then control will entirely be open loop i.e. we go into `FORCED_OPEN_LOOP` right after `OPEN_LOOP_INIT`
 
+### `USE_3_PTS`
+
+If true, code will compile that uses a 3-PT (PT stands for pressure transducer) redundant system to obtain manifold pressures as input into the control system, instead of the 2-PT system. 
+
+With the 3-PT system, the median PT value will be taken (if all the PT values are within P_MAX and P_MIN). 
+
 ## In [platformio.ini](./platformio.ini)
 
 Please note that build flags have to be applied separately to the [env:uno] and [env:native] environments. Applying a build flag to one does not result in it being applied to the other. 
@@ -17,12 +23,6 @@ Please note that build flags have to be applied separately to the [env:uno] and 
 ### `BUILD_ARDUINO` and `BUILD_NATIVE`
 
 If defined, simply means that a particular build is for either Arduino or Native (your workstation)
-
-### `USE_3_PTS`
-
-If defined, code will compile that uses a 3-PT (PT stands for pressure transducer) redundant system to obtain manifold pressures as input into the control system, instead of the 2-PT system. 
-
-With the 3-PT system, the median PT value will be taken (if all the PT values are within P_MAX and P_MIN). 
 
 ### `NO_MANUAL_ABORT`
 
