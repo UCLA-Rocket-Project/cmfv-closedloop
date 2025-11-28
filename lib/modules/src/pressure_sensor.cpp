@@ -18,7 +18,7 @@ SensorStatus PressureSensor::validateThreeSensors(float P1, float P2, float P3, 
              m_consecutiveInvalid[2] < SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD))
         return SensorStatus::PENDING_FAULT;
 
-    uint8_t ok = valid[0] + (valid[1] << 1) + (valid[2] << 2);    
+    uint8_t ok = valid[0] + (valid[1] << 1) + (valid[2] << 2);
     
     // All PT readings are invalid
     if (ok == 0) {
@@ -75,13 +75,27 @@ SensorStatus PressureSensor::validateThreeSensors(float P1, float P2, float P3, 
     }
     
     // If two sensors are valid, then we use validateTwoSensors on it
+    SensorStatus ss;
     switch (ok) {
         case 3:
-            return processTwoValidSensors(P1, P2, chosenPressure);
+            ss = processTwoValidSensors(P1, P2, chosenPressure);
+            break;
         case 5:
-            return processTwoValidSensors(P1, P3, chosenPressure);
+            ss = processTwoValidSensors(P1, P3, chosenPressure);
+            break;
         case 6:
-            return processTwoValidSensors(P2, P3, chosenPressure);
+            ss = processTwoValidSensors(P2, P3, chosenPressure);
+            break;
+        default:
+            return SensorStatus::THREE_ILLOGICAL; // Should never get here
+    }
+    switch(ss) {
+        case SensorStatus::TWO_ILLOGICAL:
+            return SensorStatus::THREE_ILLOGICAL;
+        case SensorStatus::OK_ALL:
+            return SensorStatus::ONE_ILLOGICAL;
+        case SensorStatus::PENDING_FAULT:
+            return SensorStatus::PENDING_FAULT;
         default:
             return SensorStatus::THREE_ILLOGICAL; // Should never get here
     }
@@ -125,11 +139,7 @@ SensorStatus PressureSensor::processTwoValidSensors(float P1, float P2, float& c
         
         // Only trigger fault after consecutive threshold is reached
         if (m_consecutiveDifferenceFaults >= SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD)
-#if USE_3_PTS
-            return SensorStatus::THREE_ILLOGICAL;
-#else
             return SensorStatus::TWO_ILLOGICAL;
-#endif
         else
             return SensorStatus::PENDING_FAULT;
     }

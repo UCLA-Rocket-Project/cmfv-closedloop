@@ -164,8 +164,53 @@ void test_pressure_validation_three_sensors_2() {
     TEST_ASSERT_EQUAL(SensorStatus::THREE_ILLOGICAL, ss);
 }
 
-/* Test X: All 3 pressure sensors read a logical value; the median should be returned. */
-void test_pressure_validation_three_sensors_X() {
+/* Test 3: Only one pressure sensor reads a logical value; the others, illogical. */
+void test_pressure_validation_three_sensors_3() {
+    float pressureReturned;
+    PressureSensor ps;
+    SensorStatus ss;
+    
+    ss = ps.validateThreeSensors(SensorConfig::P_MIN, SensorConfig::P_MIN - 1, SensorConfig::P_MAX + 1, pressureReturned);
+    TEST_ASSERT_EQUAL(SensorStatus::TWO_ILLOGICAL, ss);
+    TEST_ASSERT_EQUAL_FLOAT(SensorConfig::P_MIN, pressureReturned);
+
+    ss = ps.validateThreeSensors(SensorConfig::P_MIN - 1, SensorConfig::P_MAX, SensorConfig::P_MAX + 1, pressureReturned);
+    TEST_ASSERT_EQUAL(SensorStatus::TWO_ILLOGICAL, ss);
+    TEST_ASSERT_EQUAL_FLOAT(SensorConfig::P_MAX, pressureReturned);
+
+    ss = ps.validateThreeSensors(SensorConfig::P_MIN - 1, SensorConfig::P_MAX + 1, SensorConfig::P_MAX, pressureReturned);
+    TEST_ASSERT_EQUAL(SensorStatus::TWO_ILLOGICAL, ss);
+    TEST_ASSERT_EQUAL_FLOAT(SensorConfig::P_MAX, pressureReturned);
+}
+
+/* Test 4: Two pressure sensors read a logical value; one reads an illogical value. */
+void test_pressure_validation_three_sensors_4() {
+    float pressureReturned;
+    PressureSensor ps;
+    SensorStatus ss;
+    
+    ss = ps.validateThreeSensors(SensorConfig::P_MIN, SensorConfig::P_MAX, SensorConfig::P_MAX + 1, pressureReturned);
+    if (SensorConfig::P_MAX - SensorConfig::P_MIN < SensorConfig::PAIR_DIFFERENCE_THRESHOLD) {
+        TEST_ASSERT_EQUAL(SensorStatus::ONE_ILLOGICAL, ss);
+        TEST_ASSERT_EQUAL_FLOAT((SensorConfig::P_MAX + SensorConfig::P_MIN)/2, pressureReturned);
+    }
+    else
+        TEST_ASSERT_EQUAL(SensorStatus::PENDING_FAULT, ss); // Because P_MIN and P_MAX are too far apart
+
+    ss = ps.validateThreeSensors(SensorConfig::P_MIN - 1, SensorConfig::P_MAX - SensorConfig::PAIR_DIFFERENCE_THRESHOLD, SensorConfig::P_MAX, pressureReturned);
+    TEST_ASSERT_EQUAL(SensorStatus::ONE_ILLOGICAL, ss);
+    TEST_ASSERT_EQUAL_FLOAT(SensorConfig::P_MAX - SensorConfig::PAIR_DIFFERENCE_THRESHOLD/2, pressureReturned);
+
+    for (int i = 1; i < SensorConfig::CONSEC_BEFORE_ERR_THRESHOLD; i++) {
+        ss = ps.validateThreeSensors(SensorConfig::P_MIN, SensorConfig::P_MIN - 1, SensorConfig::P_MIN + SensorConfig::PAIR_DIFFERENCE_THRESHOLD + 1, pressureReturned);
+        TEST_ASSERT_EQUAL(SensorStatus::PENDING_FAULT, ss);
+    }
+    ss = ps.validateThreeSensors(SensorConfig::P_MIN, SensorConfig::P_MIN - 1, SensorConfig::P_MIN + SensorConfig::PAIR_DIFFERENCE_THRESHOLD + 1, pressureReturned);
+    TEST_ASSERT_EQUAL(SensorStatus::THREE_ILLOGICAL, ss);
+}
+
+/* Test 5: All 3 pressure sensors read a logical value; the median should be returned. */
+void test_pressure_validation_three_sensors_5() {
     float pressureReturned;
     PressureSensor ps;
     SensorStatus ss;
@@ -191,7 +236,9 @@ void run_all_pressure_sensor_tests() {
 #if USE_3_PTS
     RUN_TEST(test_pressure_validation_three_sensors_1);
     RUN_TEST(test_pressure_validation_three_sensors_2);
-    RUN_TEST(test_pressure_validation_three_sensors_X);
+    RUN_TEST(test_pressure_validation_three_sensors_3);
+    RUN_TEST(test_pressure_validation_three_sensors_4);
+    RUN_TEST(test_pressure_validation_three_sensors_5);
 #else
     RUN_TEST(test_pressure_validation_two_sensors_1);
     RUN_TEST(test_pressure_validation_two_sensors_2);
