@@ -37,8 +37,8 @@ void serviceSingleMotor(HighPowerStepperDriver& drv,
             noMotionCount++;
             if (noMotionCount >= 3){
                 faults.noMotion = true;
-                setMPV(false);
-                systemState.changeStateTo(SystemStateEnum::EMERGENCY_STOP);
+                // setMPV(false);
+                // systemState.changeStateTo(SystemStateEnum::EMERGENCY_STOP);
                 return;
             }
         } else {

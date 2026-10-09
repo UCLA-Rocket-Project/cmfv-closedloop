@@ -67,6 +67,7 @@ typedef struct {
 #if USE_3_PTS
     float pt3Reading;
 #endif
+    uint32_t packetNo;
 } telemetryPacket_t;
 
 typedef union {
@@ -106,6 +107,7 @@ typedef struct {
 #if USE_3_PTS
     float pt3Reading;
 #endif
+    uint32_t packetNo;
 } pressureUpdatePacket_t;
 
 typedef union {
@@ -120,6 +122,7 @@ struct PressureData {
 #if USE_3_PTS
     float sensor3;
 #endif
+    uint32_t packetNo;
     bool valid;
     
     PressureData() : sensor1(0.0f), sensor2(0.0f), valid(false) {}

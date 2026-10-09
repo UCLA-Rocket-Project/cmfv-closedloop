@@ -12,13 +12,13 @@
 
 // Toggle between fuel and oxidizer system
 // Set to true for FUEL system, false for OXIDIZER system
-#define IS_FUEL_SYSTEM true
+#define IS_FUEL_SYSTEM false
 
 // Open Loop toggle
 #define OPEN_LOOP_MODE false
 
 // Use 3 PTs (Set to false to use 2 PTs)
-#define USE_3_PTS true
+#define USE_3_PTS false
 
 // ================================
 // UTILITY FUNCTIONS
@@ -40,13 +40,13 @@ struct ControllerConfig {
     static constexpr float KP = 0.1f;
     static constexpr float KI = 0.05f;
     static constexpr float KD = 0.0f;
-    static constexpr float TARGET_PRESSURE_PSI = 300.0f;  // Fuel manifold target pressure
+    static constexpr float TARGET_PRESSURE_PSI = 71.86104667f;  // Fuel manifold target pressure
 #else
     // Oxidizer Controller gains
     static constexpr float KP = 0.08f;
     static constexpr float KI = 0.05f;
     static constexpr float KD = 0.0f;
-    static constexpr float TARGET_PRESSURE_PSI = 300.0f; // Ox manifold target pressure
+    static constexpr float TARGET_PRESSURE_PSI = 82.80752543f; // Ox manifold target pressure
 #endif
     
     // Integral limits (common for both systems)
@@ -82,11 +82,11 @@ struct ValveConfig {
     static constexpr float SAFE_ANGLE = 30.0f;         // Safe position for emergencies
 
     #if IS_FUEL_SYSTEM
-        static constexpr float OPENLOOP_TARGET_ANGLE = 45.0f; // Target angle for forced open loop
-        static constexpr float START_ANGLE = 45.0f;       // Starting position for closed loop
+        static constexpr float OPENLOOP_TARGET_ANGLE = 63.5f; // Target angle for forced open loop
+        static constexpr float START_ANGLE = 63.5f;       // Starting position for closed loop
     #else
-        static constexpr float OPENLOOP_TARGET_ANGLE = 45.0f; // Target angle for forced open loop
-        static constexpr float START_ANGLE = 45.0f;       // Starting position for closed loop
+        static constexpr float OPENLOOP_TARGET_ANGLE = 58.0f; // Target angle for forced open loop
+        static constexpr float START_ANGLE = 58.0f;       // Starting position for closed loop
     #endif
 
     // Position tolerance
