@@ -2,6 +2,7 @@
 #define COMM_HANDLER_H
 
 #include <CRC.h>
+#include <cstdint>
 
 #include "state_machine.h"
 
@@ -128,6 +129,12 @@ struct PressureData {
     PressureData() : sensor1(0.0f), sensor2(0.0f), valid(false) {}
 };
 
+struct ServiceMotorDroppedPacketData {
+    uint32_t START = 0xDEAD;
+    uint8_t packetData[24];
+    uint32_t packetLen;
+    uint32_t END = 0xBEEF;
+};
 
 class CommHandler {
 public:
@@ -154,6 +161,8 @@ public:
     const pressureUpdatePacketU_t& getInputBuffer() const { return m_inputBuffer; };
     const bool getPressureUpdateSuccess() const { return m_pressureUpdateSuccess; };
 #endif
+
+    void dumpCurrentIfExists();
     
 private:
     pressureUpdatePacketU_t m_inputBuffer;

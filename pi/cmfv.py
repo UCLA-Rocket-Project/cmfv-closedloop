@@ -396,6 +396,14 @@ fcv_rx_buf = bytearray()
 fcv_cur_packet_wo_magic = bytearray()
 fcv_currently_receiving = False
 
+def parse_service_motor_data(raw: bytes):
+    start, packet_data, packet_len, end = struct.unpack(
+        "<I24sII", raw
+    )
+    if start != 0xDEAD or end != 0xBEEF or packet_len > 24:
+        return None, 0
+    return packet_data[:packet_len], packet_len
+
 def drain_telemetry_from_port(serial_port, rx_buf, cur_packet_wo_magic, currently_receiving, controller_name):
     """Consume all currently buffered bytes from a specific port; decode and process complete telemetry packets"""
     drained = 0
@@ -423,7 +431,16 @@ def drain_telemetry_from_port(serial_port, rx_buf, cur_packet_wo_magic, currentl
                         if telemetry:
                             ts = epoch_ms()
                             log_telemetry.write(f"{ts},{controller_name}: {str(telemetry)}\n")
-                            latest_telemetry = telemetry 
+                            latest_telemetry = telemetry
+                        # test if it is a debug packet and log it
+
+                        byte_dump, packet_len = parse_service_motor_data(cur_packet_wo_magic)
+
+                        if byte_dump is not None and packet_len > 0:
+                            with open("out.txt", "a") as file:
+                                file.write(f"packetLen: {packet_len} | ")
+                                file.write(f"packetData: {bytes(byte_dump[:packet_len]).hex(' ')}\n\n")
+
                     else:
                         # still waiting for more bytes
                         cur_packet_wo_magic.extend(chunk)
