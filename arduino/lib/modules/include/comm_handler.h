@@ -69,6 +69,7 @@ typedef struct {
     float pt3Reading;
 #endif
     uint32_t packetNo;
+    uint32_t timestamp;
 } telemetryPacket_t;
 
 typedef union {

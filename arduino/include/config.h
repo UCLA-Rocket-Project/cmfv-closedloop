@@ -40,13 +40,13 @@ struct ControllerConfig {
     static constexpr float KP = 0.1f;
     static constexpr float KI = 0.05f;
     static constexpr float KD = 0.0f;
-    static constexpr float TARGET_PRESSURE_PSI = 71.86104667f;  // Fuel manifold target pressure
+    static constexpr float TARGET_PRESSURE_PSI = 620.00f;  // Fuel manifold target pressure
 #else
     // Oxidizer Controller gains
     static constexpr float KP = 0.08f;
     static constexpr float KI = 0.05f;
     static constexpr float KD = 0.0f;
-    static constexpr float TARGET_PRESSURE_PSI = 82.80752543f; // Ox manifold target pressure
+    static constexpr float TARGET_PRESSURE_PSI = 580.00f; // Ox manifold target pressure
 #endif
     
     // Integral limits (common for both systems)

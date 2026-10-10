@@ -129,7 +129,8 @@ void CommHandler::sendTelemetry(SystemStateEnum state, float motorAngle,
 #if USE_3_PTS
   m_outputBuffer.data.pt3Reading = m_pressureData.sensor3;
 #endif
-  m_outputBuffer.data.packetNo = m_pressureData.packetNo;
+    m_outputBuffer.data.packetNo = m_pressureData.packetNo;
+    m_outputBuffer.data.timestamp = millis();
 
   // Calculate CRC16 checksum
   m_outputBuffer.data._checksum =
