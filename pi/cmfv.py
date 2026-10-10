@@ -441,6 +441,9 @@ def drain_telemetry_from_port(serial_port, rx_buf, cur_packet_wo_magic, currentl
                                 file.write(f"packetLen: {packet_len} | ")
                                 file.write(f"packetData: {bytes(byte_dump[:packet_len]).hex(' ')}\n\n")
 
+                            # return some old values as garbage for now...
+                            return latest_telemetry, drained, currently_receiving
+
                     else:
                         # still waiting for more bytes
                         cur_packet_wo_magic.extend(chunk)
