@@ -51,7 +51,7 @@ void serviceSingleMotor(HighPowerStepperDriver &drv, float currentAngleDeg,
 
 #ifndef PIO_UNIT_TESTING
   // Discard half-received PT update packet (if any)
-  commHandler->dumpCurrentIfExists();
+//   commHandler->dumpCurrentIfExists();
   commHandler->flushInputBuffer();
 #endif
 }

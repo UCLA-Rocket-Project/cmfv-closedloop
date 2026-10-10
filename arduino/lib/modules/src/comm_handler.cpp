@@ -153,15 +153,15 @@ uint16_t CommHandler::calcChecksum(const uint8_t *array, unsigned int length) {
   return checksum;
 }
 
-void CommHandler::dumpCurrentIfExists() {
-  if (m_bufLen > 0) {
-    ServiceMotorDroppedPacketData p{};
-    int data_idx = 0;
-    while (Serial.available()) {
-      p.packetData[data_idx++] = Serial.read();
-    }
-    p.packetLen = data_idx;
+// void CommHandler::dumpCurrentIfExists() {
+//   if (m_bufLen > 0) {
+//     ServiceMotorDroppedPacketData p{};
+//     int data_idx = 0;
+//     while (Serial.available()) {
+//       p.packetData[data_idx++] = Serial.read();
+//     }
+//     p.packetLen = data_idx;
 
-    Serial.write((const char *)& p, sizeof(ServiceMotorDroppedPacketData));
-  }
-}
+//     Serial.write((const char *)& p, sizeof(ServiceMotorDroppedPacketData));
+//   }
+// }
