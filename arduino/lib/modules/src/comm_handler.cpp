@@ -156,12 +156,15 @@ uint16_t CommHandler::calcChecksum(const uint8_t *array, unsigned int length) {
 void CommHandler::dumpCurrentIfExists() {
   if (m_bufLen > 0) {
     ServiceMotorDroppedPacketData p{};
-    int data_idx = 0;
-    while (Serial.available()) {
-      p.packetData[data_idx++] = Serial.read();
-    }
-    p.packetLen = data_idx;
+    static_assert(sizeof(p.packetData) >= UPDTPKT_SIZE,
+                  "Dropped packet buffer must fit a pressure update packet");
+    // Report exactly the partial packet flushInputBuffer() will discard.
+    // Leave bytes still in the serial queue for normal packet processing.
+    p.packetLen = m_bufLen;
+    if (p.packetLen > sizeof(p.packetData))
+      p.packetLen = sizeof(p.packetData);
+    memcpy(p.packetData, m_inputBuffer.bytes, p.packetLen);
 
-    Serial.write((const char *)& p, sizeof(ServiceMotorDroppedPacketData));
+    Serial.write(reinterpret_cast<const uint8_t *>(&p), sizeof(p));
   }
 }

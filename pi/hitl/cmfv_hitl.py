@@ -51,6 +51,9 @@ DEFAULT_FCV_ANGLE = 63.5
 DUMMY_PRESSURE_SET_POINT = 601.54
 
 MAGIC_START = b'\xfb\xad'
+SERVICE_MOTOR_MAGIC = struct.pack('<I', 0xDEAD)
+SERVICE_MOTOR_FMT = '<I24sII'
+SERVICE_MOTOR_SIZE = struct.calcsize(SERVICE_MOTOR_FMT)
 TELPKT_FMTSTR_WO_MAGIC = '<HBBBBfffff'
 TELPKT_FMTSTR_WO_MAGIC += 'I'
 TELPKT_FMTSTR_WO_MAGIC += 'I' #timestamp
@@ -356,169 +359,83 @@ fcv_controller_telemetry = None
 
 # Non-blocking read buffers for both controllers
 ocv_rx_buf = bytearray()
-ocv_cur_packet_wo_magic = bytearray()
-ocv_currently_receiving = False
 
 fcv_rx_buf = bytearray()
-fcv_cur_packet_wo_magic = bytearray()
-fcv_currently_receiving = False
 
 def parse_service_motor_data(raw: bytes):
-    start, packet_data, packet_len, end = struct.unpack(
-        "<I24sII", raw
-    )
+    if len(raw) != SERVICE_MOTOR_SIZE:
+        return None, 0
+    start, packet_data, packet_len, end = struct.unpack(SERVICE_MOTOR_FMT, raw)
     if start != 0xDEAD or end != 0xBEEF or packet_len > 24:
         return None, 0
     return packet_data[:packet_len], packet_len
 
-def drain_telemetry_from_port(serial_port, rx_buf, cur_packet_wo_magic, currently_receiving, controller_name):
-    """Consume all currently buffered bytes from a specific port; decode and process complete telemetry packets"""
+
+def drain_telemetry_from_port(serial_port, rx_buf, controller_name):
+    """Decode telemetry and dropped-packet dumps, retaining incomplete frames."""
     drained = 0
-    latest_telemetry = None 
-    
+    latest_telemetry = None
+
     try:
         waiting = serial_port.in_waiting
+        if waiting > 0:
+            rx_buf.extend(serial_port.read(waiting))
     except Exception as e:
-        logging.debug(f"Failed to check in_waiting for {controller_name}: {e}")
-        waiting = 0
+        logging.debug(f"Serial read failed for {controller_name}: {e}")
 
-    if waiting > 0:
-        try:
-            chunk = serial_port.read(waiting)
-            if chunk:
-                if currently_receiving:
-                    to_receive = TELPKT_SIZE_WO_MAGIC - len(cur_packet_wo_magic)
-                    if len(chunk) >= to_receive:
-                        # complete the pending packet
-                        cur_packet_wo_magic.extend(chunk[:to_receive])
-                        chunk = chunk[to_receive:]
-                        telemetry = parse_telemetry(bytes(cur_packet_wo_magic))
-                        cur_packet_wo_magic.clear()
-                        currently_receiving = False
-                        if telemetry:
-                            ts = epoch_ms()
-                            log_telemetry.write(f"{ts},{controller_name}: {str(telemetry)}\n")
-                            latest_telemetry = telemetry
-                        # test if it is a debug packet and log it
-
-                        byte_dump, packet_len = parse_service_motor_data(cur_packet_wo_magic)
-
-                        if byte_dump is not None and packet_len > 0:
-                            with open("out.txt", "a") as file:
-                                file.write(f"packetLen: {packet_len} | ")
-                                file.write(f"packetData: {bytes(byte_dump[:packet_len]).hex(' ')}\n\n")
-
-                            # return some old values as garbage for now...
-                            return latest_telemetry, drained, currently_receiving
-
-                    else:
-                        # still waiting for more bytes
-                        cur_packet_wo_magic.extend(chunk)
-                        chunk = b''
-                if chunk:
-                    rx_buf.extend(chunk)
-        except Exception as e:
-            logging.debug(f"Serial read chunk failed for {controller_name}: {e}")
-            return latest_telemetry, drained, currently_receiving
-
-    while True:
-        pos = rx_buf.find(MAGIC_START)
-        if pos == -1:
+    while rx_buf:
+        positions = []
+        for magic in (MAGIC_START, SERVICE_MOTOR_MAGIC):
+            pos = rx_buf.find(magic)
+            if pos >= 0:
+                positions.append(pos)
+        if not positions:
+            # Keep a possible header prefix split across serial reads.
+            keep = 0
+            for magic in (MAGIC_START, SERVICE_MOTOR_MAGIC):
+                for length in range(1, len(magic)):
+                    if rx_buf.endswith(magic[:length]):
+                        keep = max(keep, length)
+            del rx_buf[:len(rx_buf) - keep]
             break
-        del rx_buf[:pos+2]  # Also drop MAGIC_START
-        if len(rx_buf) >= TELPKT_SIZE_WO_MAGIC:
-            cur_packet_wo_magic.clear()
-            cur_packet_wo_magic.extend(rx_buf[:TELPKT_SIZE_WO_MAGIC])
-            del rx_buf[:TELPKT_SIZE_WO_MAGIC]
-            telemetry = parse_telemetry(bytes(cur_packet_wo_magic))
-            cur_packet_wo_magic.clear()
-            currently_receiving = False
-            if telemetry:
-                ts = epoch_ms()
-                log_telemetry.write(f"{ts},{controller_name}: {str(telemetry)}\n")
-                latest_telemetry = telemetry  
-            drained += 1
+
+        del rx_buf[:min(positions)]
+        is_dump = rx_buf.startswith(SERVICE_MOTOR_MAGIC)
+        packet_size = SERVICE_MOTOR_SIZE if is_dump else len(MAGIC_START) + TELPKT_SIZE_WO_MAGIC
+        if len(rx_buf) < packet_size:
+            break
+
+        raw = bytes(rx_buf[:packet_size])
+        if is_dump:
+            byte_dump, packet_len = parse_service_motor_data(raw)
+            if byte_dump is None:
+                del rx_buf[:1]
+                continue
+            # Consume the whole dump so headers inside its payload are ignored.
+            del rx_buf[:packet_size]
+            with open("out.txt", "a") as file:
+                file.write(f"{epoch_ms()},{controller_name} | packetLen: {packet_len} | ")
+                file.write(f"packetData: {byte_dump.hex(' ')}\n")
         else:
-            cur_packet_wo_magic.clear()
-            cur_packet_wo_magic.extend(rx_buf[:])
-            rx_buf.clear()
-            currently_receiving = True
-            break  
-    
-    return latest_telemetry, drained, currently_receiving
+            telemetry = parse_telemetry(raw[len(MAGIC_START):])
+            if telemetry is None:
+                del rx_buf[:1]
+                continue
+            del rx_buf[:packet_size]
+            log_telemetry.write(f"{epoch_ms()},{controller_name}: {str(telemetry)}\n")
+            latest_telemetry = telemetry
+            drained += 1
 
-# def drain_telemetry_from_port(serial_port, rx_buf, cur_packet_wo_magic, currently_receiving, controller_name):
-#     """Consume all currently buffered bytes from a specific port; decode and process complete telemetry packets"""
-#     drained = 0
-#     latest_telemetry = None 
-    
-#     try:
-#         waiting = serial_port.in_waiting
-#     except Exception as e:
-#         logging.debug(f"Failed to check in_waiting for {controller_name}: {e}")
-#         waiting = 0
+    return latest_telemetry, drained
 
-#     if waiting > 0:
-#         try:
-#             chunk = serial_port.read(waiting)
-#             if chunk:
-#                 if currently_receiving:
-#                     to_receive = TELPKT_SIZE_WO_MAGIC - len(cur_packet_wo_magic)
-#                     if len(chunk) >= to_receive:
-#                         # complete the pending packet
-#                         cur_packet_wo_magic.extend(chunk[:to_receive])
-#                         chunk = chunk[to_receive:]
-#                         telemetry = parse_telemetry(bytes(cur_packet_wo_magic))
-#                         cur_packet_wo_magic.clear()
-#                         currently_receiving = False
-#                         if telemetry:
-#                             ts = epoch_ms()
-#                             log_telemetry.write(f"{ts},{controller_name}: {str(telemetry)}\n")
-#                             latest_telemetry = telemetry 
-#                     else:
-#                         # still waiting for more bytes
-#                         cur_packet_wo_magic.extend(chunk)
-#                         chunk = b''
-#                 if chunk:
-#                     rx_buf.extend(chunk)
-#         except Exception as e:
-#             logging.debug(f"Serial read chunk failed for {controller_name}: {e}")
-#             return latest_telemetry, drained, currently_receiving
-
-#     while True:
-#         pos = rx_buf.find(MAGIC_START)
-#         if pos == -1:
-#             break
-#         del rx_buf[:pos+2]  # Also drop MAGIC_START
-#         if len(rx_buf) >= TELPKT_SIZE_WO_MAGIC:
-#             cur_packet_wo_magic.clear()
-#             cur_packet_wo_magic.extend(rx_buf[:TELPKT_SIZE_WO_MAGIC])
-#             del rx_buf[:TELPKT_SIZE_WO_MAGIC]
-#             telemetry = parse_telemetry(bytes(cur_packet_wo_magic))
-#             cur_packet_wo_magic.clear()
-#             currently_receiving = False
-#             if telemetry:
-#                 ts = epoch_ms()
-#                 log_telemetry.write(f"{ts},{controller_name}: {str(telemetry)}\n")
-#                 latest_telemetry = telemetry  
-#             drained += 1
-#         else:
-#             cur_packet_wo_magic.clear()
-#             cur_packet_wo_magic.extend(rx_buf[:])
-#             rx_buf.clear()
-#             currently_receiving = True
-#             break  
-    
-#     return latest_telemetry, drained, currently_receiving
 
 def drain_telemetry():
     """Drain telemetry from both controllers"""
     global ocv_controller_telemetry, fcv_controller_telemetry
-    global ocv_currently_receiving, fcv_currently_receiving
     
     # Drain from OCV controller
-    new_ocv_telemetry, ocv_drained, ocv_currently_receiving = drain_telemetry_from_port(
-        ocv_serial_port, ocv_rx_buf, ocv_cur_packet_wo_magic, ocv_currently_receiving, "OCV"
+    new_ocv_telemetry, ocv_drained = drain_telemetry_from_port(
+        ocv_serial_port, ocv_rx_buf, "OCV"
     )
     if new_ocv_telemetry:
         ocv_controller_telemetry = new_ocv_telemetry
@@ -528,8 +445,8 @@ def drain_telemetry():
             ocv_controller_state = new_ocv_telemetry['systemState']
     
     # Drain from FCV controller
-    new_fcv_telemetry, fcv_drained, fcv_currently_receiving = drain_telemetry_from_port(
-        fcv_serial_port, fcv_rx_buf, fcv_cur_packet_wo_magic, fcv_currently_receiving, "FCV"
+    new_fcv_telemetry, fcv_drained = drain_telemetry_from_port(
+        fcv_serial_port, fcv_rx_buf, "FCV"
     )
     if new_fcv_telemetry:
         fcv_controller_telemetry = new_fcv_telemetry

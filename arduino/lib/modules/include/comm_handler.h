@@ -2,7 +2,7 @@
 #define COMM_HANDLER_H
 
 #include <CRC.h>
-#include <cstdint>
+#include <stdint.h>
 
 #include "state_machine.h"
 
