@@ -134,6 +134,8 @@ struct ServiceMotorDroppedPacketData {
     uint32_t START = 0xDEAD;
     uint8_t packetData[24];
     uint32_t packetLen;
+    uint32_t ts;
+    uint32_t pno;
     uint32_t END = 0xBEEF;
 };
 

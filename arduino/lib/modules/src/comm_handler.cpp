@@ -164,6 +164,7 @@ void CommHandler::dumpCurrentIfExists() {
     if (p.packetLen > sizeof(p.packetData))
       p.packetLen = sizeof(p.packetData);
     memcpy(p.packetData, m_inputBuffer.bytes, p.packetLen);
+    p.ts = millis();
 
     Serial.write(reinterpret_cast<const uint8_t *>(&p), sizeof(p));
   }

@@ -52,7 +52,7 @@ DUMMY_PRESSURE_SET_POINT = 601.54
 
 MAGIC_START = b'\xfb\xad'
 SERVICE_MOTOR_MAGIC = struct.pack('<I', 0xDEAD)
-SERVICE_MOTOR_FMT = '<I24sII'
+SERVICE_MOTOR_FMT = '<I24sIII'
 SERVICE_MOTOR_SIZE = struct.calcsize(SERVICE_MOTOR_FMT)
 TELPKT_FMTSTR_WO_MAGIC = '<HBBBBfffff'
 TELPKT_FMTSTR_WO_MAGIC += 'I'
@@ -365,10 +365,10 @@ fcv_rx_buf = bytearray()
 def parse_service_motor_data(raw: bytes):
     if len(raw) != SERVICE_MOTOR_SIZE:
         return None, 0
-    start, packet_data, packet_len, end = struct.unpack(SERVICE_MOTOR_FMT, raw)
+    start, packet_data, packet_len, ts, end = struct.unpack(SERVICE_MOTOR_FMT, raw)
     if start != 0xDEAD or end != 0xBEEF or packet_len > 24:
-        return None, 0
-    return packet_data[:packet_len], packet_len
+        return None, 0, None
+    return packet_data[:packet_len], packet_len, ts
 
 
 def drain_telemetry_from_port(serial_port, rx_buf, controller_name):
@@ -407,14 +407,14 @@ def drain_telemetry_from_port(serial_port, rx_buf, controller_name):
 
         raw = bytes(rx_buf[:packet_size])
         if is_dump:
-            byte_dump, packet_len = parse_service_motor_data(raw)
+            byte_dump, packet_len, ts = parse_service_motor_data(raw)
             if byte_dump is None:
                 del rx_buf[:1]
                 continue
             # Consume the whole dump so headers inside its payload are ignored.
             del rx_buf[:packet_size]
             with open("out.txt", "a") as file:
-                file.write(f"{epoch_ms()},{controller_name} | packetLen: {packet_len} | ")
+                file.write(f"{epoch_ms()},{controller_name},{ts} | packetLen: {packet_len} | ")
                 file.write(f"packetData: {byte_dump.hex(' ')}\n")
         else:
             telemetry = parse_telemetry(raw[len(MAGIC_START):])
