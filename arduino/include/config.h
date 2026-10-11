@@ -12,7 +12,13 @@
 
 // Toggle between fuel and oxidizer system
 // Set to true for FUEL system, false for OXIDIZER system
+#ifdef FCV
+#define IS_FUEL_SYSTEM true
+#endif
+
+#ifdef OCV
 #define IS_FUEL_SYSTEM false
+#endif
 
 // Open Loop toggle
 #define OPEN_LOOP_MODE false

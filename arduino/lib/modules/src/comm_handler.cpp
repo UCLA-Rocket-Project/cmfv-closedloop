@@ -15,6 +15,8 @@ CommHandler::CommHandler()
               CRC16_XMODEM_REV_IN, CRC16_XMODEM_REV_OUT),
       m_otherCtrlerState(SystemStateEnum::BOOT_INIT), m_numConsecInvalidPUP(0) {
   m_lastCommTime = millis();
+
+  m_debugPacketNo = 0;
 }
 
 void CommHandler::processIncomingNonBlocking() {
@@ -151,6 +153,39 @@ uint16_t CommHandler::calcChecksum(const uint8_t *array, unsigned int length) {
   uint16_t checksum = m_crc16.calc();
   m_crc16.restart();
   return checksum;
+}
+
+void CommHandler::sendDebugPacket() {
+  DebugPacket p{};
+
+  p.timestamp = millis();
+  p.packetNo = m_debugPacketNo;
+  if (strcmp(HardwareConfig::SYSTEM_NAME, "FUEL") == 0) {
+    p.is_fuel = 1;
+  }
+  else {
+    p.is_fuel = 0;
+  }
+  
+  p.faults = 0;
+  if (faults.manualAbort)
+    p.faults |= TELPKT_FAULTS_MANUAL_ABORT;
+  if (faults.commTimeout)
+    p.faults |= TELPKT_FAULTS_COMM_TIMEOUT;
+  if (faults.encoderMismatch)
+    p.faults |= TELPKT_FAULTS_ENCODER_ERROR;
+  if (faults.noMotion)
+    p.faults |= TELPKT_FAULTS_NO_MOTION;
+  if (faults.sensorFault)
+    p.faults |= TELPKT_FAULTS_SENSOR_FAULT;
+  if (faults.redBandFault)
+    p.faults |= TELPKT_FAULTS_REDBAND_FAULT;
+
+  p.systemState = systemState.currentState;
+
+  Serial.write((const char *)& p, DBGPKT_SIZE);
+
+  m_debugPacketNo += 1;
 }
 
 // void CommHandler::dumpCurrentIfExists() {

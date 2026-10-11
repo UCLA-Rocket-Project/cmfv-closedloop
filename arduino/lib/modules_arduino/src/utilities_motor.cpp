@@ -5,14 +5,20 @@
 #include "utilities_motor.h"
 
 extern CommHandler *commHandler;
+extern SystemState systemState;
 
 // Motor control functions
 void serviceSingleMotor(HighPowerStepperDriver &drv, float currentAngleDeg,
                         float targetAngleDeg) {
+  
   float errDeg = targetAngleDeg - currentAngleDeg;
   static int noMotionCount = 0;
 
   while (fabs(errDeg) > MotorControlConfig::ANGLE_DEADBAND_DEG) {
+    if (fabs(getEncoderAngle()) > 75.00f && (systemState.currentState == SystemStateEnum::CLOSED_LOOP)) {
+      break;
+    }
+
     // Proportional steps
     float desiredSteps = MotorControlConfig::KP_STEPS_PER_DEG * errDeg;
     long steps = lroundf(desiredSteps);
@@ -52,6 +58,7 @@ void serviceSingleMotor(HighPowerStepperDriver &drv, float currentAngleDeg,
 #ifndef PIO_UNIT_TESTING
   // Discard half-received PT update packet (if any)
 //   commHandler->dumpCurrentIfExists();
+  commHandler->sendDebugPacket();
   commHandler->flushInputBuffer();
 #endif
 }

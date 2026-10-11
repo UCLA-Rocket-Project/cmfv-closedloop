@@ -51,6 +51,7 @@
 #endif
 
 #define TELPKT_SIZE sizeof(telemetryPacket_t)
+#define DBGPKT_SIZE sizeof(DebugPacket)
 
 typedef struct {
     uint16_t _magic;
@@ -137,6 +138,17 @@ struct ServiceMotorDroppedPacketData {
     uint32_t END = 0xBEEF;
 };
 
+struct DebugPacket {
+    uint32_t START = 0xDEAD;
+    
+    uint8_t faults;
+    SystemStateEnum systemState;
+
+    uint8_t is_fuel;
+    uint32_t timestamp;
+    uint32_t packetNo;
+};
+
 class CommHandler {
 public:
     CommHandler();
@@ -164,6 +176,8 @@ public:
 #endif
 
     void dumpCurrentIfExists();
+    void sendDebugPacket();
+    uint32_t m_debugPacketNo;
     
 private:
     pressureUpdatePacketU_t m_inputBuffer;
@@ -188,6 +202,8 @@ private:
     void updateNumConsecInvalidPUP(bool valid);
     bool isValidPressure(float p);
     uint16_t calcChecksum(const uint8_t *array, unsigned int length);
+
+    
 };
 
 #endif // COMM_HANDLER_H
