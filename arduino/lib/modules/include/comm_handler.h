@@ -142,7 +142,7 @@ struct DebugPacket {
     uint32_t START = 0xDEAD;
     
     uint8_t faults;
-    SystemStateEnum systemState;
+    SystemStateEnum systemState; //uint8_t;
 
     uint8_t is_fuel;
     uint32_t timestamp;

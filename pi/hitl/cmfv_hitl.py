@@ -64,6 +64,26 @@ TELPKT_FMTSTR_WO_MAGIC = '<HBBBBfffff'
 TELPKT_FMTSTR_WO_MAGIC += 'I'
 TELPKT_FMTSTR_WO_MAGIC += 'I' #timestamp
 
+###### DEBUG PACKETS ######
+
+# struct DebugPacket {
+#     uint32_t START = 0xDEAD;
+    
+#     uint8_t faults;
+#     SystemStateEnum systemState; //uint8_t;
+
+#     uint8_t is_fuel;
+#     uint32_t timestamp;
+#     uint32_t packetNo;
+# };
+
+TELPKT_TYPE = "TELPKT"
+DBGPKT_TYPE = "DBGPKT"
+
+DBGPKT_MAGIC_START = b'\xad\xde'
+DBGPKT_FMTSTR_WO_MAGIC = '<BBBII'
+DBGPKT_SIZE_WO_MAGIC = struct.calcsize(DBGPKT_FMTSTR_WO_MAGIC)
+
 # if USE_3_PTS:
 #     TELPKT_FMTSTR_WO_MAGIC += 'I'
 TELPKT_SIZE_WO_MAGIC = struct.calcsize(TELPKT_FMTSTR_WO_MAGIC)
@@ -272,7 +292,7 @@ from time import monotonic_ns
 def now_ms() -> int:
     return int(monotonic_ns() // 1_000_000)
 
-def parse_telemetry(packet: bytes) -> dict:
+def parse_telemetry_packet(packet: bytes, packet_type) -> dict:
     """Telemetry Packet Layout
     0        8       16       24       32 (Bits)
     +--------+--------+--------+--------+
@@ -345,6 +365,60 @@ def parse_telemetry(packet: bytes) -> dict:
     
     return None
 
+def parse_debug_packet(packet: bytes) -> dict:
+    if not packet or len(packet) != DBGPKT_SIZE_WO_MAGIC:
+        return None
+    
+    try:
+        unpacked_data = struct.unpack(DBGPKT_FMTSTR_WO_MAGIC, packet)
+        if len(unpacked_data) == len(DBGPKT_FMTSTR_WO_MAGIC) - 1:
+            
+            formatted_data = {
+                'faults': unpacked_data[2],
+                'systemState': systemState,
+
+                'ifMpvShdBeClosed': unpacked_data[0] & TELPKT_MPV_SHD_BE_CLOSED != 0,
+                'ifMpvOpenDetected': unpacked_data[0] & TELPKT_MPV_OPEN_DETECTED != 0,
+                'systemType': 'FUEL' if (unpacked_data[0] & TELPKT_SYSTEM_TYPE) != 0 else 'OX',
+
+                'faults.manualAbort': unpacked_data[0] & TELPKT_FAULTS_MANUAL_ABORT != 0,
+                'faults.commTimeout': unpacked_data[0] & TELPKT_FAULTS_COMM_TIMEOUT != 0,
+                'faults.encoderError': unpacked_data[0] & TELPKT_FAULTS_ENCODER_ERROR != 0,
+                'faults.noMotion': unpacked_data[0] & TELPKT_FAULTS_NO_MOTION != 0,
+                'faults.sensorFault': unpacked_data[0] & TELPKT_FAULTS_SENSOR_FAULT != 0,
+                'faults.redbandFault': unpacked_data[0] & TELPKT_FAULTS_REDBAND_FAULT != 0,
+                'faults.oscillationDetected': unpacked_data[0] & TELPKT_FAULTS_OSCILLATION_DETECTED != 0,
+
+                'motorAngle': unpacked_data[5],
+                'deltaAngle': unpacked_data[6],
+                'pidIntergralError': unpacked_data[7],
+                'pt1Reading': unpacked_data[8],
+                'pt2Reading': unpacked_data[9]
+            }
+            # if USE_3_PTS: 
+            #     to_return['pt3Reading'] = unpacked_data[10]
+
+            to_return['packetNo'] = unpacked_data[10]
+            to_return['timestamp'] = unpacked_data[11]
+            return formatted_data
+    except (ValueError, IndexError) as e:
+        logging.warning(f"Failed to parse telemetry line '{packet}': {e}")
+    
+    return None
+
+def parse_telemetry(packet: bytes, packet_type) -> dict:
+    if not packet or (len(packet) != DBGPKT_SIZE_WO_MAGIC and len(packet) != TELPKT_SIZE_WO_MAGIC):
+        return None
+    
+    if packet_type == TELPKT_TYPE:
+        return parse_telemetry_packet(packet)
+
+    elif packet_type == DBGPKT_TYPE:
+        return parse_debug_packet(packet)
+    
+    else:
+        return None
+
 def craft_pressure_update_packet(other_state: int, if_mpv_open: bool, pt1_reading: float, pt2_reading: float, packetNo: int) -> bytes:
     flags = 0
     if (if_mpv_open): flags |= UPDPKT_IF_MPV_OPEN
@@ -372,69 +446,180 @@ fcv_rx_buf = bytearray()
 fcv_cur_packet_wo_magic = bytearray()
 fcv_currently_receiving = False
 
-def drain_telemetry_from_port(serial_port, rx_buf, cur_packet_wo_magic, currently_receiving, controller_name):
-    """Consume all currently buffered bytes from a specific port; decode and process complete telemetry packets"""
+def drain_telemetry_from_port(serial_port, rx_buf, cur_packet_wo_magic, currently_receiving, cur_packet_type, controller_name):
     drained = 0
-    latest_telemetry = None 
-    
+    latest_telemetry = None
+
+    #check how many bytes are in serial port
     try:
         waiting = serial_port.in_waiting
     except Exception as e:
         logging.debug(f"Failed to check in_waiting for {controller_name}: {e}")
         waiting = 0
-
+    
+    #finish current packet
     if waiting > 0:
         try:
+            #read everything from serial port
             chunk = serial_port.read(waiting)
+
             if chunk:
+                #finish the packet
                 if currently_receiving:
-                    to_receive = TELPKT_SIZE_WO_MAGIC - len(cur_packet_wo_magic)
+
+                    #finish the packet based on the type
+                    if cur_packet_type == TELPKT_TYPE:
+                        to_receive = TELPKT_SIZE_WO_MAGIC - len(cur_packet_wo_magic)
+                    elif cur_packet_type == DBGPKT_TYPE:
+                        to_recieve = DBGPKT_SIZE_WO_MAGIC - len(cur_packet_wo_magic)
+                    
                     if len(chunk) >= to_receive:
-                        # complete the pending packet
+                        #complete the pending packet
                         cur_packet_wo_magic.extend(chunk[:to_receive])
                         chunk = chunk[to_receive:]
-                        telemetry = parse_telemetry(bytes(cur_packet_wo_magic))
+
+                        #parse the packet
+                        #ADD: prob add an argument based on the packet type
+                        telemetry = parse_telemetry(bytes(cur_packet_wo_magic), cur_packet_type)
+
                         cur_packet_wo_magic.clear()
                         currently_receiving = False
+                        cur_packet_type = None
+
                         if telemetry:
                             ts = epoch_ms()
                             log_telemetry.write(f"{ts},{controller_name}: {str(telemetry)}\n")
-                            latest_telemetry = telemetry 
+                            latest_telemetry = telemetry
+                    
                     else:
-                        # still waiting for more bytes
+                        #we didn't finish the packet yet
                         cur_packet_wo_magic.extend(chunk)
                         chunk = b''
                 if chunk:
                     rx_buf.extend(chunk)
         except Exception as e:
             logging.debug(f"Serial read chunk failed for {controller_name}: {e}")
-            return latest_telemetry, drained, currently_receiving
-
+            return latest_telemetry, drained, currently_receiving, cur_packet_type
+                    
+    #go through the rest of the buffer after finishing the packet
     while True:
-        pos = rx_buf.find(MAGIC_START)
-        if pos == -1:
+        telpkt_pos = rx_buf.find(MAGIC_START)
+        dbgpkt_pos = rx_buf.find(DBGPKT_MAGIC_START)
+
+        pkt_pos = None
+        
+        if telpkt_pos == -1 and dbgpkt_pos == -1:
             break
-        del rx_buf[:pos+2]  # Also drop MAGIC_START
-        if len(rx_buf) >= TELPKT_SIZE_WO_MAGIC:
+            
+        if telpkt_pos == -1:
+            pkt_pos = dbgpkt_pos
+            cur_packet_type = DBGPKT_TYPE
+        elif dbgpkt_pos == -1:
+            pkt_pos = telpkt_pos
+            cur_packet_type = TELPKT_TYPE
+        elif telpkt_pos < dbgpkt_pos:
+            pkt_pos = telpkt_pos
+            cur_packet_type = TELPKT_TYPE
+        else:
+            pkt_pos = dbgpkt_pos
+            cur_packet_type = DBGPKT_TYPE
+
+        del rx_buf[:pkt_pos+2] #drop magic start
+
+        #determine which packet type
+        if cur_packet_type == DBGPKT_TYPE:
+            length = DBGPKT_SIZE_WO_MAGIC
+        elif cur_packet_type == TELPKT_TYPE:
+            length = TELPKT_SIZE_WO_MAGIC
+        
+        if len(rx_buf) >= length:
             cur_packet_wo_magic.clear()
-            cur_packet_wo_magic.extend(rx_buf[:TELPKT_SIZE_WO_MAGIC])
-            del rx_buf[:TELPKT_SIZE_WO_MAGIC]
-            telemetry = parse_telemetry(bytes(cur_packet_wo_magic))
+            cur_packet_wo_magic.extend(rx_buf[:length])
+            del rx_buf[:length]
+            telemetry = parse_telemetry(bytes(cur_packet_wo_magic), cur_packet_type)
             cur_packet_wo_magic.clear()
             currently_receiving = False
+            cur_packet_type = None
             if telemetry:
                 ts = epoch_ms()
                 log_telemetry.write(f"{ts},{controller_name}: {str(telemetry)}\n")
-                latest_telemetry = telemetry  
+                latest_telemetry = telemetry 
             drained += 1
         else:
             cur_packet_wo_magic.clear()
             cur_packet_wo_magic.extend(rx_buf[:])
             rx_buf.clear()
             currently_receiving = True
-            break  
+            break
     
-    return latest_telemetry, drained, currently_receiving
+    return latest_telemetry, drained, currently_receiving, cur_packet_type
+    
+
+# def drain_telemetry_from_port(serial_port, rx_buf, cur_packet_wo_magic, currently_receiving, controller_name):
+#     """Consume all currently buffered bytes from a specific port; decode and process complete telemetry packets"""
+#     drained = 0
+#     latest_telemetry = None
+    
+#     try:
+#         waiting = serial_port.in_waiting
+#     except Exception as e:
+#         logging.debug(f"Failed to check in_waiting for {controller_name}: {e}")
+#         waiting = 0
+
+#     if waiting > 0:
+#         try:
+#             chunk = serial_port.read(waiting)
+#             if chunk:
+#                 #finish the packet
+#                 if currently_receiving:
+#                     to_receive = TELPKT_SIZE_WO_MAGIC - len(cur_packet_wo_magic)
+#                     if len(chunk) >= to_receive:
+#                         # complete the pending packet
+#                         cur_packet_wo_magic.extend(chunk[:to_receive])
+#                         chunk = chunk[to_receive:]
+#                         telemetry = parse_telemetry(bytes(cur_packet_wo_magic))
+#                         cur_packet_wo_magic.clear()
+#                         currently_receiving = False
+#                         if telemetry:
+#                             ts = epoch_ms()
+#                             log_telemetry.write(f"{ts},{controller_name}: {str(telemetry)}\n")
+#                             latest_telemetry = telemetry 
+#                     else:
+#                         # still waiting for more bytes
+#                         cur_packet_wo_magic.extend(chunk)
+#                         chunk = b''
+#                 if chunk:
+#                     rx_buf.extend(chunk)
+#         except Exception as e:
+#             logging.debug(f"Serial read chunk failed for {controller_name}: {e}")
+#             return latest_telemetry, drained, currently_receiving
+
+#     #go through the rest of the buffer after finishing the packet
+#     while True:
+#         pos = rx_buf.find(MAGIC_START)
+#         if pos == -1:
+#             break
+#         del rx_buf[:pos+2]  # Also drop MAGIC_START
+#         if len(rx_buf) >= TELPKT_SIZE_WO_MAGIC:
+#             cur_packet_wo_magic.clear()
+#             cur_packet_wo_magic.extend(rx_buf[:TELPKT_SIZE_WO_MAGIC])
+#             del rx_buf[:TELPKT_SIZE_WO_MAGIC]
+#             telemetry = parse_telemetry(bytes(cur_packet_wo_magic))
+#             cur_packet_wo_magic.clear()
+#             currently_receiving = False
+#             if telemetry:
+#                 ts = epoch_ms()
+#                 log_telemetry.write(f"{ts},{controller_name}: {str(telemetry)}\n")
+#                 latest_telemetry = telemetry  
+#             drained += 1
+#         else:
+#             cur_packet_wo_magic.clear()
+#             cur_packet_wo_magic.extend(rx_buf[:])
+#             rx_buf.clear()
+#             currently_receiving = True
+#             break  
+    
+#     return latest_telemetry, drained, currently_receiving
 
 def drain_telemetry():
     """Drain telemetry from both controllers"""
