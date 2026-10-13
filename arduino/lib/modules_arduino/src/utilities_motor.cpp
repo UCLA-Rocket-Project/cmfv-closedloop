@@ -50,7 +50,7 @@ void serviceSingleMotor(HighPowerStepperDriver& drv,
 
 #ifndef PIO_UNIT_TESTING
     // Discard half-received PT update packet (if any)
-    commHandler->flushInputBuffer();
+    // commHandler->flushInputBuffer();
 #endif
 }
 

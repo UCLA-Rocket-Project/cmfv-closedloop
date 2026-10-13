@@ -17,7 +17,9 @@ import synnax as sy
 ##########################
 
 ##### MAY NEED TO CHANGE THESE #####
-USE_3_PTS = True
+
+##### CURRENTLY DEFUNCT #####
+USE_3_PTS = False
 
 # Serial port config for both controllers
 OCV_SERIAL_PORT = '/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_8513531363535160A0C1-if00' # Controller 1, OCV (Oxidizer)
@@ -28,26 +30,29 @@ PORT_LV = '/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_B4:3A:45:B
 PT_BOARD_BAUDRATE = 460800
 ARDUINO_BOARD_BAUDRATE = 115200
 
+FCV_SETPOINT = 71.86104667
+OCV_SETPOINT = 82.80752543
+
 # PT Sensors
 NUM_SENSORS_HV = 8 
 NUM_SENSORS_LV = 8 
 NUM_SENSORS_TOTAL = NUM_SENSORS_HV + NUM_SENSORS_LV
-FCV_PT1 = 6
-FCV_PT2 = 7
-FCV_PT3 = 11
-OCV_PT1 = 4
-OCV_PT2 = 5
-OCV_PT3 = 10
+FCV_PT1 = -1  #UPDATE THESE
+FCV_PT2 = -1  #UPDATE THESE
+FCV_PT3 = None
+OCV_PT1 = -1  #UPDATE THESE
+OCV_PT2 = -1  #UPDATE THESE
+OCV_PT3 = None
 
 # PT Logging
 DATA_CHANNELS = [f"pt{i}" for i in range(NUM_SENSORS_TOTAL)]
-LOG_RAW_FILE = '/home/ares_gs/synnax_node/scripts/logs/pt_2_data_raw_grafana.csv'
-LOG_CAL_FILE = '/home/ares_gs/synnax_node/scripts/logs/pt_2_data_cal_grafana.csv'
+LOG_RAW_FILE = './logs/pt_data_raw_grafana.csv'
+LOG_CAL_FILE = './logs/pt_data_cal_grafana.csv'
 UDP_ADDRESS_PORT = ('127.0.0.1', 4020)
 MEASUREMENT = 'pressurevals'
 
-LOG_TELEMETRY_FILE = '/home/ares_gs/synnax_node/scripts/logs/cmfv_hitl/telemetry_from_both_controllers.csv'
-LOG_SENT_DUMMY_DATA_FILE = '/home/ares_gs/synnax_node/scripts/logs/cmfv_hitl/sent_pressure_data_both_controllers.csv'
+LOG_TELEMETRY_FILE = './logs/cmfv_hitl/telemetry_from_both_controllers.csv'
+LOG_SENT_DUMMY_DATA_FILE = './logs/cmfv_hitl/sent_pressure_data_both_controllers.csv'
 
 EXPECTED_PACKET_SIZE = 40 + 2 # 8 floats, 2 unsigned longs and 2 control characters
 STOP_SEQUENCE = b'\r\n'
@@ -58,15 +63,17 @@ LUT_ANGLE_RANGE_MAX = 90
 LUT_ANGLE_INTERVAL = 0.5
 
 # Default angles when no telemetry is available
-DEFAULT_OCV_ANGLE = 45  
-DEFAULT_FCV_ANGLE = 45
+DEFAULT_OCV_ANGLE = 58 
+DEFAULT_FCV_ANGLE = 63.5
 
 DUMMY_PRESSURE_SET_POINT = 601.54
 
 MAGIC_START = b'\xfb\xad'
 TELPKT_FMTSTR_WO_MAGIC = '<HBBBBfffff'
-if USE_3_PTS:
-    TELPKT_FMTSTR_WO_MAGIC += 'f'
+
+#for packet numbers
+TELPKT_FMTSTR_WO_MAGIC += 'I'
+
 TELPKT_SIZE_WO_MAGIC = struct.calcsize(TELPKT_FMTSTR_WO_MAGIC)
 # TELPKT flags
 TELPKT_MPV_OPEN_DETECTED = 0x1
@@ -83,9 +90,11 @@ TELPKT_FAULTS_OSCILLATION_DETECTED = 0x80
 
 UPDTPKT_FMTSTR_WO_MAGIC = '<HBBHff'
 UPDTPKT_FMTSTR_WO_MAGIC_AND_CHECKSUM = '<BBHff'
-if USE_3_PTS:
-    UPDTPKT_FMTSTR_WO_MAGIC += 'f'
-    UPDTPKT_FMTSTR_WO_MAGIC_AND_CHECKSUM += 'f'
+
+#for packet numbers
+UPDTPKT_FMTSTR_WO_MAGIC += 'I'
+UPDTPKT_FMTSTR_WO_MAGIC_AND_CHECKSUM += 'I'
+
 UPDTPKT_SIZE_WO_MAGIC = struct.calcsize(UPDTPKT_FMTSTR_WO_MAGIC)
 # UPDTPKT flags
 UPDPKT_IF_MPV_OPEN = 0x1
@@ -102,13 +111,13 @@ PRESSURE_SEND_RATE = 200        # Pi sends pressure data to controller (Hz)
 
 SOFTWARE_LPF_WEIGHTING_FACTOR = 0.3
 
-MPV_CHANNEL_NAME = "digital_pin_cmd_4"
+MPV_CHANNEL_NAME = "controls_state_11"
 isMPVOpen = False
 
 # Calibration coefficients (y = ax + b)
-a = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 
-b = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+a = [1.96407711, 0, 0, 0, 0, 0, 0, 0, 0.40152116, 0.24843447, 0.2471319, 0.24410202, 0.24358774, 0.18571931, 0.24272498, 0.07380922] #UPDATE
+b = [-25.07076, 0, 0, 0, 0, 0, 0, 0, -219.3357, -135.32946, -154.3176, -135.8598, -133.68178, -100.30746, -135.64698, -50.70929]
 
 ######################
 #### LOGGER SETUP ####
@@ -185,7 +194,7 @@ client = sy.Synnax(
     port=9091,
     username="synnax",
     password="seldon",
-    secure=True
+    secure=False
 )
 
 ##########################
@@ -332,10 +341,9 @@ def parse_telemetry(packet: bytes) -> dict:
                 'deltaAngle': unpacked_data[6],
                 'pidIntergralError': unpacked_data[7],
                 'pt1Reading': unpacked_data[8],
-                'pt2Reading': unpacked_data[9]
+                'pt2Reading': unpacked_data[9],
+                'packetNo': unpacked_data[10]
             }
-            if USE_3_PTS: 
-                to_return['pt3Reading'] = unpacked_data[10]
             return to_return
     except (ValueError, IndexError) as e:
         logging.warning(f"Failed to parse telemetry line '{packet}': {e}")
@@ -369,13 +377,11 @@ def read_pt_frame_nonblocking(serial_port, pt_grp, expected_packet_size):
             
     return line.removesuffix(STOP_SEQUENCE)
 
-def craft_pressure_update_packet(other_state: int, if_mpv_open: bool, pt1_reading: float, pt2_reading: float, pt3_reading: Optional[float] = None) -> bytes:
+def craft_pressure_update_packet(other_state: int, if_mpv_open: bool, pt1_reading: float, pt2_reading: float, packetNo: int) -> bytes:
     flags = 0
     if (if_mpv_open): flags |= UPDPKT_IF_MPV_OPEN
-    if (pt3_reading != None):
-        pup_wo_magic_and_checksum = struct.pack(UPDTPKT_FMTSTR_WO_MAGIC_AND_CHECKSUM, other_state, flags, 0, pt1_reading, pt2_reading, pt3_reading)
-    else:
-        pup_wo_magic_and_checksum = struct.pack(UPDTPKT_FMTSTR_WO_MAGIC_AND_CHECKSUM, other_state, flags, 0, pt1_reading, pt2_reading)
+    
+    pup_wo_magic_and_checksum = struct.pack(UPDTPKT_FMTSTR_WO_MAGIC_AND_CHECKSUM, other_state, flags, 0, pt1_reading, pt2_reading, packetNo)
     checksum = crcCalculator.checksum(pup_wo_magic_and_checksum)
     return MAGIC_START + struct.pack('<H', checksum) + pup_wo_magic_and_checksum
 
@@ -539,6 +545,10 @@ try:
 except Exception as e:
     logging.exception("Failed to open Synnax streamer; proceeding with MPV assumed CLOSED.")
 
+start_time = int(time.time())
+
+packetNo = 0
+
 while True:
     try:
         curr_mono = now_ms()
@@ -585,7 +595,6 @@ while True:
                 timestamp = epoch_ms()
                 log_raw.write(f'{global_start_ms + current_board_timestamp - board_start_time}' + ',' + ','.join([f"{val:.2f}" for val in readings]) + f"{data[8]},{data[9]},{data[18]},{data[19]}" + "\n")
 
-                # Apply calibration
                 calibrated_data = [
                     float(a[i]) * float(readings[i]) + float(b[i])
                     for i in range(NUM_SENSORS_TOTAL)
@@ -605,14 +614,6 @@ while True:
                 if current_ox_pressure_pt2 != None:
                     current_ox_pressure_pt2 = current_ox_pressure_pt2 * SOFTWARE_LPF_WEIGHTING_FACTOR + calibrated_data[OCV_PT2] * (1 - SOFTWARE_LPF_WEIGHTING_FACTOR)
                 else: current_ox_pressure_pt2 = calibrated_data[OCV_PT2]
-                
-                if USE_3_PTS:
-                    if current_fuel_pressure_pt3 != None:
-                        current_fuel_pressure_pt3 = current_fuel_pressure_pt3 * SOFTWARE_LPF_WEIGHTING_FACTOR + calibrated_data[FCV_PT3] * (1 - SOFTWARE_LPF_WEIGHTING_FACTOR)
-                    else: current_fuel_pressure_pt3 = calibrated_data[FCV_PT3]
-                    if current_ox_pressure_pt3 != None:
-                        current_ox_pressure_pt3 = current_ox_pressure_pt3 * SOFTWARE_LPF_WEIGHTING_FACTOR + calibrated_data[OCV_PT3] * (1 - SOFTWARE_LPF_WEIGHTING_FACTOR)
-                    else: current_ox_pressure_pt3 = calibrated_data[OCV_PT3]
 
                 # Stream to Grafana at ~10 Hz
                 if curr_mono - prev_time >= 100:
@@ -638,6 +639,7 @@ while True:
             fcv_controller_state = SystemState.BOOT_INIT
 
         if curr_mono >= next_send:
+            packetNo = (packetNo + 1) & 0xFFFFFFFF
 
             # Determine what to send to each controller
             ocv_pt1 = current_ox_pressure_pt1
@@ -662,7 +664,7 @@ while True:
                     isMPVOpen, 
                     ocv_pt1,  
                     ocv_pt2,
-                    ocv_pt3
+                    packetNo
                 )
                 ocv_serial_port.write(ocv_pressure_packet)
                 
@@ -671,7 +673,7 @@ while True:
                     isMPVOpen, 
                     fcv_pt1, 
                     fcv_pt2,
-                    fcv_pt3
+                    packetNo
                 )
                 fcv_serial_port.write(fcv_pressure_packet)
                 
@@ -714,6 +716,7 @@ while True:
             print(f"OCV Controller State: {ocv_controller_state}")
             print(f"FCV Controller State: {fcv_controller_state}")
             print(f"MPV State: {'OPEN' if isMPVOpen else 'CLOSED'}")
+            print(f"Packet Number: {packetNo}")
             next_status += status_period_ms
 
     except KeyboardInterrupt:
