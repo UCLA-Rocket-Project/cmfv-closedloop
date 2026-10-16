@@ -2,6 +2,7 @@
 #define COMM_HANDLER_H
 
 #include <CRC.h>
+// #include <cstdint>
 
 #include "state_machine.h"
 
@@ -50,6 +51,7 @@
 #endif
 
 #define TELPKT_SIZE sizeof(telemetryPacket_t)
+#define DBGPKT_SIZE sizeof(DebugPacket)
 
 typedef struct {
     uint16_t _magic;
@@ -67,6 +69,8 @@ typedef struct {
 #if USE_3_PTS
     float pt3Reading;
 #endif
+    uint32_t packetNo;
+    // uint32_t timestamp;
 } telemetryPacket_t;
 
 typedef union {
@@ -106,6 +110,7 @@ typedef struct {
 #if USE_3_PTS
     float pt3Reading;
 #endif
+    uint32_t packetNo;
 } pressureUpdatePacket_t;
 
 typedef union {
@@ -120,11 +125,29 @@ struct PressureData {
 #if USE_3_PTS
     float sensor3;
 #endif
+    uint32_t packetNo;
     bool valid;
     
     PressureData() : sensor1(0.0f), sensor2(0.0f), valid(false) {}
 };
 
+// struct ServiceMotorDroppedPacketData {
+//     uint32_t START = 0xDEAD;
+//     uint8_t packetData[24];
+//     uint32_t packetLen;
+//     uint32_t END = 0xBEEF;
+// };
+
+// struct DebugPacket {
+//     uint32_t START = 0xDEAD;
+    
+//     uint8_t faults;
+//     SystemStateEnum systemState; //uint8_t;
+
+//     uint8_t is_fuel;
+//     uint32_t timestamp;
+//     uint32_t packetNo;
+// };
 
 class CommHandler {
 public:
@@ -151,6 +174,10 @@ public:
     const pressureUpdatePacketU_t& getInputBuffer() const { return m_inputBuffer; };
     const bool getPressureUpdateSuccess() const { return m_pressureUpdateSuccess; };
 #endif
+
+    // void dumpCurrentIfExists();
+    // void sendDebugPacket();
+    // uint32_t m_debugPacketNo;
     
 private:
     pressureUpdatePacketU_t m_inputBuffer;
@@ -175,6 +202,8 @@ private:
     void updateNumConsecInvalidPUP(bool valid);
     bool isValidPressure(float p);
     uint16_t calcChecksum(const uint8_t *array, unsigned int length);
+
+    
 };
 
 #endif // COMM_HANDLER_H
