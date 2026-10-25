@@ -12,7 +12,7 @@
 
 // Toggle between fuel and oxidizer system
 // Set to true for FUEL system, false for OXIDIZER system
-#define IS_FUEL_SYSTEM true
+#define IS_FUEL_SYSTEM false
 
 // Open Loop toggle
 #define OPEN_LOOP_MODE false
