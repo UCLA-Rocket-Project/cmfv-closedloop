@@ -12,7 +12,7 @@
 
 // Toggle between fuel and oxidizer system
 // Set to true for FUEL system, false for OXIDIZER system
-#define IS_FUEL_SYSTEM false
+#define IS_FUEL_SYSTEM true
 
 // Open Loop toggle
 #define OPEN_LOOP_MODE false
@@ -40,13 +40,13 @@ struct ControllerConfig {
     static constexpr float KP = 0.1f;
     static constexpr float KI = 0.05f;
     static constexpr float KD = 0.0f;
-    static constexpr float TARGET_PRESSURE_PSI = 300.0f;  // Fuel manifold target pressure
+    static constexpr float TARGET_PRESSURE_PSI = 118.2752502f;  // Fuel manifold target pressure
 #else
     // Oxidizer Controller gains
     static constexpr float KP = 0.08f;
     static constexpr float KI = 0.05f;
     static constexpr float KD = 0.0f;
-    static constexpr float TARGET_PRESSURE_PSI = 300.0f; // Ox manifold target pressure
+    static constexpr float TARGET_PRESSURE_PSI = 80.55220418f; // Ox manifold target pressure
 #endif
     
     // Integral limits (common for both systems)
@@ -62,9 +62,9 @@ struct TimingConfig {
     static constexpr float CONTROL_PERIOD_HZ = 20.0f;  // Control loop frequency in Hz
     static constexpr float CONTROL_PERIOD_S = 1.0f / CONTROL_PERIOD_HZ; // Expected period (used as fallback)
     static constexpr float COMM_TIMEOUT_S = 3.0f;      // Communication check
-    static constexpr float SAFE_TIMER_S = 0.5f;        // Safety delay before MPV
+    static constexpr float SAFE_TIMER_S = 3.0f;        // Safety delay before MPV
     static constexpr float RECOVERY_DWELL_S = 3.0f;    // Time in forced open loop before recovery
-    static constexpr float REDBAND_TIMEOUT = 2.0f;      // Time until redband activation
+    static constexpr float REDBAND_TIMEOUT = 3.0f;      // Time until redband activation
 };
 
 // ================================
@@ -82,10 +82,10 @@ struct ValveConfig {
     static constexpr float SAFE_ANGLE = 30.0f;         // Safe position for emergencies
 
     #if IS_FUEL_SYSTEM
-        static constexpr float OPENLOOP_TARGET_ANGLE = 72.0f; // Target angle for forced open loop
+        static constexpr float OPENLOOP_TARGET_ANGLE = 78.3f; // Target angle for forced open loop
         static constexpr float START_ANGLE = 70.0f;       // Starting position for closed loop
     #else
-        static constexpr float OPENLOOP_TARGET_ANGLE = 63.7f; // Target angle for forced open loop
+        static constexpr float OPENLOOP_TARGET_ANGLE = 61.4f; // Target angle for forced open loop
         static constexpr float START_ANGLE = 60.0f;       // Starting position for closed loop
     #endif
 
