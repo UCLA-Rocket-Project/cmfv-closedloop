@@ -15,6 +15,8 @@
 #include <utilities_motor.h>
 #include <utilities.h>
 
+#include "check.h"
+
 // Hardware objects for single valve system
 HighPowerStepperDriver stepperDriver;
 AMT22* encoder;

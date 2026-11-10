@@ -17,7 +17,7 @@ import synnax as sy
 ##########################
 
 ##### MAY NEED TO CHANGE THESE #####
-USE_3_PTS = False
+USE_3_PTS = True
 
 # Serial port config for both controllers
 OCV_SERIAL_PORT = '/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_8513531363535160A0C1-if00' # Controller 1, OCV (Oxidizer)
@@ -66,9 +66,11 @@ DEFAULT_FCV_ANGLE = 63.5
 
 MAGIC_START = b'\xfb\xad'
 TELPKT_FMTSTR_WO_MAGIC = '<HBBBBfffff'
+if USE_3_PTS:
+    TELPKT_FMTSTR_WO_MAGIC += 'f'
+#packet numbers
 TELPKT_FMTSTR_WO_MAGIC += 'I'
-# if USE_3_PTS:
-#     TELPKT_FMTSTR_WO_MAGIC += 'I'
+
 TELPKT_SIZE_WO_MAGIC = struct.calcsize(TELPKT_FMTSTR_WO_MAGIC)
 # TELPKT flags
 TELPKT_MPV_OPEN_DETECTED = 0x1
@@ -86,12 +88,13 @@ TELPKT_FAULTS_OSCILLATION_DETECTED = 0x80
 UPDTPKT_FMTSTR_WO_MAGIC = '<HBBHff'
 UPDTPKT_FMTSTR_WO_MAGIC_AND_CHECKSUM = '<BBHff'
 
+if USE_3_PTS:
+    UPDTPKT_FMTSTR_WO_MAGIC += 'f'
+    UPDTPKT_FMTSTR_WO_MAGIC_AND_CHECKSUM += 'f'
+
+#packet numbers
 UPDTPKT_FMTSTR_WO_MAGIC += 'I'
 UPDTPKT_FMTSTR_WO_MAGIC_AND_CHECKSUM += 'I'
-
-# if USE_3_PTS:
-#     UPDTPKT_FMTSTR_WO_MAGIC += 'f'
-#     UPDTPKT_FMTSTR_WO_MAGIC_AND_CHECKSUM += 'f'
 
 UPDTPKT_SIZE_WO_MAGIC = struct.calcsize(UPDTPKT_FMTSTR_WO_MAGIC)
 # UPDTPKT flags
@@ -347,10 +350,11 @@ def parse_telemetry(packet: bytes) -> dict:
                 'pt1Reading': unpacked_data[8],
                 'pt2Reading': unpacked_data[9]
             }
-            # if USE_3_PTS: 
-            #     to_return['pt3Reading'] = unpacked_data[10]
-
-            to_return['packetNo'] = unpacked_data[10]
+            if USE_3_PTS: 
+                to_return['pt3Reading'] = unpacked_data[10]
+                to_return['packetNo'] = unpacked_data[11]
+            else:
+                to_return['packetNo'] = unpacked_data[10]
             return to_return
     except (ValueError, IndexError) as e:
         logging.warning(f"Failed to parse telemetry line '{packet}': {e}")
@@ -384,13 +388,13 @@ def read_pt_frame_nonblocking(serial_port, pt_grp, expected_packet_size):
             
     return line.removesuffix(STOP_SEQUENCE)
 
-def craft_pressure_update_packet(other_state: int, if_mpv_open: bool, pt1_reading: float, pt2_reading: float, packetNo: int) -> bytes:
+def craft_pressure_update_packet(other_state: int, if_mpv_open: bool, pt1_reading: float, pt2_reading: float, pt3_reading: float, packetNo: int) -> bytes:
     flags = 0
     if (if_mpv_open): flags |= UPDPKT_IF_MPV_OPEN
-    # if (pt3_reading != None):
-    #     pup_wo_magic_and_checksum = struct.pack(UPDTPKT_FMTSTR_WO_MAGIC_AND_CHECKSUM, other_state, flags, 0, pt1_reading, pt2_reading, pt3_reading)
-    # else:
-    pup_wo_magic_and_checksum = struct.pack(UPDTPKT_FMTSTR_WO_MAGIC_AND_CHECKSUM, other_state, flags, 0, pt1_reading, pt2_reading, packetNo)
+    if (pt3_reading != None):
+        pup_wo_magic_and_checksum = struct.pack(UPDTPKT_FMTSTR_WO_MAGIC_AND_CHECKSUM, other_state, flags, 0, pt1_reading, pt2_reading, pt3_reading, packetNo)
+    else:
+        pup_wo_magic_and_checksum = struct.pack(UPDTPKT_FMTSTR_WO_MAGIC_AND_CHECKSUM, other_state, flags, 0, pt1_reading, pt2_reading, packetNo)
     checksum = crcCalculator.checksum(pup_wo_magic_and_checksum)
     return MAGIC_START + struct.pack('<H', checksum) + pup_wo_magic_and_checksum
 
@@ -631,13 +635,13 @@ while True:
                     current_ox_pressure_pt2 = current_ox_pressure_pt2 * SOFTWARE_LPF_WEIGHTING_FACTOR + calibrated_data[OCV_PT2] * (1 - SOFTWARE_LPF_WEIGHTING_FACTOR)
                 else: current_ox_pressure_pt2 = calibrated_data[OCV_PT2]
                 
-                # if USE_3_PTS:
-                #     if current_fuel_pressure_pt3 != None:
-                #         current_fuel_pressure_pt3 = current_fuel_pressure_pt3 * SOFTWARE_LPF_WEIGHTING_FACTOR + calibrated_data[FCV_PT3] * (1 - SOFTWARE_LPF_WEIGHTING_FACTOR)
-                #     else: current_fuel_pressure_pt3 = calibrated_data[FCV_PT3]
-                #     if current_ox_pressure_pt3 != None:
-                #         current_ox_pressure_pt3 = current_ox_pressure_pt3 * SOFTWARE_LPF_WEIGHTING_FACTOR + calibrated_data[OCV_PT3] * (1 - SOFTWARE_LPF_WEIGHTING_FACTOR)
-                #     else: current_ox_pressure_pt3 = calibrated_data[OCV_PT3]
+                if USE_3_PTS:
+                    if current_fuel_pressure_pt3 != None:
+                        current_fuel_pressure_pt3 = current_fuel_pressure_pt3 * SOFTWARE_LPF_WEIGHTING_FACTOR + calibrated_data[FCV_PT3] * (1 - SOFTWARE_LPF_WEIGHTING_FACTOR)
+                    else: current_fuel_pressure_pt3 = calibrated_data[FCV_PT3]
+                    if current_ox_pressure_pt3 != None:
+                        current_ox_pressure_pt3 = current_ox_pressure_pt3 * SOFTWARE_LPF_WEIGHTING_FACTOR + calibrated_data[OCV_PT3] * (1 - SOFTWARE_LPF_WEIGHTING_FACTOR)
+                    else: current_ox_pressure_pt3 = calibrated_data[OCV_PT3]
 
                 # Stream to Grafana at ~10 Hz
                 if curr_mono - prev_time >= 100:
@@ -688,6 +692,7 @@ while True:
                     isMPVOpen, 
                     ocv_pt1,  
                     ocv_pt2,
+                    ocv_pt3,
                     packetNo
                 )
                 ocv_serial_port.write(ocv_pressure_packet)
@@ -697,6 +702,7 @@ while True:
                     isMPVOpen, 
                     fcv_pt1, 
                     fcv_pt2,
+                    fcv_pt3,
                     packetNo
                 )
                 fcv_serial_port.write(fcv_pressure_packet)

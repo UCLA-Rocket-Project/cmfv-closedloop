@@ -70,7 +70,7 @@ typedef struct {
     float pt3Reading;
 #endif
     uint32_t packetNo;
-    // uint32_t timestamp;
+
 } telemetryPacket_t;
 
 typedef union {
@@ -127,27 +127,12 @@ struct PressureData {
 #endif
     uint32_t packetNo;
     bool valid;
-    
-    PressureData() : sensor1(0.0f), sensor2(0.0f), valid(false) {}
+#if USE_3_PTS
+    PressureData() : sensor1(0.0f), sensor2(0.0f), sensor3(0.0f), packetNo(0), valid(false) {}
+#else
+    PressureData() : sensor1(0.0f), sensor2(0.0f), packetNo(0), valid(false) {}
+#endif
 };
-
-// struct ServiceMotorDroppedPacketData {
-//     uint32_t START = 0xDEAD;
-//     uint8_t packetData[24];
-//     uint32_t packetLen;
-//     uint32_t END = 0xBEEF;
-// };
-
-// struct DebugPacket {
-//     uint32_t START = 0xDEAD;
-    
-//     uint8_t faults;
-//     SystemStateEnum systemState; //uint8_t;
-
-//     uint8_t is_fuel;
-//     uint32_t timestamp;
-//     uint32_t packetNo;
-// };
 
 class CommHandler {
 public:
@@ -174,10 +159,6 @@ public:
     const pressureUpdatePacketU_t& getInputBuffer() const { return m_inputBuffer; };
     const bool getPressureUpdateSuccess() const { return m_pressureUpdateSuccess; };
 #endif
-
-    // void dumpCurrentIfExists();
-    // void sendDebugPacket();
-    // uint32_t m_debugPacketNo;
     
 private:
     pressureUpdatePacketU_t m_inputBuffer;
