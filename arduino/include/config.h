@@ -12,13 +12,13 @@
 
 // Toggle between fuel and oxidizer system
 // Set to true for FUEL system, false for OXIDIZER system
-#define IS_FUEL_SYSTEM true
+#define IS_FUEL_SYSTEM false
 
 // Open Loop toggle
 #define OPEN_LOOP_MODE false
 
 // Use 3 PTs (Set to false to use 2 PTs)
-#define USE_3_PTS false
+#define USE_3_PTS true
 
 // ================================
 // UTILITY FUNCTIONS
