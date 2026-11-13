@@ -40,13 +40,13 @@ struct ControllerConfig {
     static constexpr float KP = 0.1f;
     static constexpr float KI = 0.05f;
     static constexpr float KD = 0.0f;
-    static constexpr float TARGET_PRESSURE_PSI = 118.2752502f;  // Fuel manifold target pressure
+    static constexpr float TARGET_PRESSURE_PSI = 103.5752502f;  // Fuel manifold target pressure
 #else
     // Oxidizer Controller gains
     static constexpr float KP = 0.08f;
     static constexpr float KI = 0.05f;
     static constexpr float KD = 0.0f;
-    static constexpr float TARGET_PRESSURE_PSI = 80.55220418f; // Ox manifold target pressure
+    static constexpr float TARGET_PRESSURE_PSI = 65.85220418f; // Ox manifold target pressure
 #endif
     
     // Integral limits (common for both systems)
@@ -82,11 +82,11 @@ struct ValveConfig {
     static constexpr float SAFE_ANGLE = 30.0f;         // Safe position for emergencies
 
     #if IS_FUEL_SYSTEM
-        static constexpr float OPENLOOP_TARGET_ANGLE = 78.3f; // Target angle for forced open loop
-        static constexpr float START_ANGLE = 70.0f;       // Starting position for closed loop
+        static constexpr float OPENLOOP_TARGET_ANGLE = 48.0f; // Target angle for forced open loop
+        static constexpr float START_ANGLE = 48.0f;       // Starting position for closed loop
     #else
-        static constexpr float OPENLOOP_TARGET_ANGLE = 61.4f; // Target angle for forced open loop
-        static constexpr float START_ANGLE = 60.0f;       // Starting position for closed loop
+        static constexpr float OPENLOOP_TARGET_ANGLE = 46.0f; // Target angle for forced open loop
+        static constexpr float START_ANGLE = 46.0f;       // Starting position for closed loop
     #endif
 
     // Position tolerance
