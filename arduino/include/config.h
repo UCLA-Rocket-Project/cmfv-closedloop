@@ -18,7 +18,7 @@
 #define OPEN_LOOP_MODE false
 
 // Use 3 PTs (Set to false to use 2 PTs)
-#define USE_3_PTS true
+#define USE_3_PTS false
 
 // ================================
 // UTILITY FUNCTIONS

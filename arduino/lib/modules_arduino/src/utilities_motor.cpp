@@ -5,6 +5,27 @@
 #include "utilities.h"
 
 extern CommHandler* commHandler;
+extern bool MPV_CONTROL;
+
+void _publishTelemetry() {
+    static unsigned long lastTelemetryTime = 0;
+    
+    if (millis() - lastTelemetryTime > (1000.0f / CommConfig::TELEMETRY_RATE_HZ)) {
+        // if closeMPV is true, close MPV
+        bool closeMPV = !MPV_CONTROL;
+
+        // Send telemetry for single system: "T,state,angle,pid_error,system_type,close_mpv"
+        // Note: We modify the telemetry format to indicate which system this is
+        commHandler->sendTelemetry(systemState.currentState,
+                                channel.currentAngle,
+                                controller->getError(),
+                                controller->getIntegral(),
+                                HardwareConfig::SYSTEM_NAME,
+                                closeMPV);
+
+        lastTelemetryTime = millis();
+    }
+}
 
 // Motor control functions
 void serviceSingleMotor(HighPowerStepperDriver& drv,
@@ -28,6 +49,7 @@ void serviceSingleMotor(HighPowerStepperDriver& drv,
         for (long i = 0; i < n; ++i) {
             drv.step();
             delayMicroseconds(HardwareConfig::STEP_PERIOD_US);
+            _publishTelemetry();
         }
 
         // No motion check
@@ -44,6 +66,9 @@ void serviceSingleMotor(HighPowerStepperDriver& drv,
         } else {
             noMotionCount = 0;
         }
+        
+        //theoretically, the motor can get stuck without this being called, so let's make sure that it is
+        _publishTelemetry();
 
         errDeg = targetAngleDeg - getEncoderAngle();
     }
@@ -59,4 +84,5 @@ void serviceMotor() {
 
     float tgt = channel.targetAngle;
     serviceSingleMotor(stepperDriver, cur, tgt);
+
 }
