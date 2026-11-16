@@ -33,7 +33,7 @@ ChannelState channel;
 FaultFlags faults;
 bool redBandCheck = false;
 
-static constexpr float TEST_DELTA_DEG = 0.68f;
+static constexpr float TEST_DELTA_DEG = 1.3 * ValveConfig::ANGLE_TOLERANCE;
 // Conservative software travel boundary for the isolated valve test.
 // Not a substitute for mechanical stops or an independent power cutoff.
 static constexpr float MIN_TEST_ANGLE_DEG = 32.0f;
@@ -96,8 +96,10 @@ static void runCorrection(unsigned long trial, float target, float initial) {
         stepperDriver.setDirection(steps > 0 ? 0 : 1);
         const long n = labs(steps);
         const unsigned long stepStart = micros();
+
         for (long i = 0; i < n; ++i) {
             stepperDriver.step();
+            if ()
             delayMicroseconds(HardwareConfig::STEP_PERIOD_US);
         }
         totalSteps += (unsigned long)n;

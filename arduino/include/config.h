@@ -90,7 +90,7 @@ struct ValveConfig {
     #endif
 
     // Position tolerance
-    static constexpr float ANGLE_TOLERANCE = 0.5f;    // Acceptable angle error (degrees)
+    static constexpr float ANGLE_TOLERANCE = 2.5f;    // Acceptable angle error (degrees)
 };
 
 // ================================
@@ -125,7 +125,7 @@ struct HardwareConfig {
     static constexpr uint32_t ENCODER_SPI_MAX_DATA_RATE = 2000000;
     
     // Stepper motor configuration
-    static constexpr uint16_t STEP_PERIOD_US = 750;
+    static constexpr uint16_t STEP_PERIOD_US = 750; //750
     static constexpr float DEGREES_PER_STEP = 0.036f;
     static constexpr uint16_t MOTOR_CURRENT_MA = 1500;
     
