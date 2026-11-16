@@ -15,6 +15,9 @@
 #include <utilities_motor.h>
 #include <utilities.h>
 
+// #include "check.h"
+#include "motor_debug.h"
+
 // Hardware objects for single valve system
 HighPowerStepperDriver stepperDriver;
 AMT22* encoder;
@@ -41,8 +44,23 @@ void forcedOpenLoop();
 void emergencyStop();
 void resetSystemOnMpvCycle();
 
+#ifdef MOTOR_DEBUG_TEXT
+// Route libc printf to the Uno USB UART. Use only for a TEXT debug session.
+static int motorDebugPutchar(char c, FILE*) {
+    if (c == '\n') Serial.write('\r');
+    Serial.write((uint8_t)c);
+    return 0;
+}
+static FILE motorDebugStream;
+#endif
+
 void setup() {
     Serial.begin(CommConfig::BAUD_RATE);
+#ifdef MOTOR_DEBUG_TEXT
+    fdev_setup_stream(&motorDebugStream, motorDebugPutchar, nullptr, _FDEV_SETUP_WRITE);
+    stdout = &motorDebugStream;
+    MOTOR_LOG("[BOOT] MOTOR_DEBUG_TEXT enabled; binary telemetry OFF\n");
+#endif
     
     // Initialize SPI and pins
     SPI.begin();
@@ -84,17 +102,26 @@ void setup() {
 }
 
 void loop() {
-    // Process incoming communications
+#ifdef MOTOR_DEBUG_TEXT
+    static unsigned long lastLoopLog = 0;
+    const bool traceLoop = (millis() - lastLoopLog >= 1000UL);
+    if (traceLoop) {
+        lastLoopLog = millis();
+        MOTOR_LOG("[LOOP] enter t=%lu state=%d\n", millis(), (int)systemState.currentState);
+    }
+#endif
     commHandler->processIncomingNonBlocking();
-    
-    // Run global monitors
     globalMonitors();
-    
-    // Run state machine
+#ifdef MOTOR_DEBUG_TEXT
+    if (traceLoop) MOTOR_LOG("[LOOP] before stateMachineUpdate t=%lu\n", millis());
+#endif
     stateMachineUpdate();
-    
-    // Periodic telemetry (rate limited internally)
+#ifdef MOTOR_DEBUG_TEXT
+    if (traceLoop) MOTOR_LOG("[LOOP] after stateMachineUpdate t=%lu\n", millis());
+    // Intentional: text-only debug, NO binary telemetry on this UART.
+#else
     publishTelemetry();
+#endif
 }
 
 void globalMonitors() {
