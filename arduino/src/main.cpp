@@ -1,11 +1,18 @@
-// Ares EGSE Closed Loop CMFV Code - Single System Version
-// Purpose: Complete closed-loop single valve control system with state machine
-// Controls either fuel or oxidizer valve based on IS_FUEL_SYSTEM configuration
+// CMFV repeated small-error motor reproduction (isolated, unpressurized bench only).
+// Replace ONLY arduino/src/main.cpp with this file.
+// Does not run the normal state machine, pressure/HITL communications, or binary telemetry.
+// Requires explicit ARM over serial. Opening a serial monitor may reset an Arduino Uno.
+// Once armed, each trial targets the most recent encoder angle minus 0.68 deg.
+// Never commands a return stroke. A non-converging trial remains in its loop.
+// Stop using an independent motor-power cutoff: serial Ctrl+C cannot stop it.
 
+#include <Arduino.h>
 #include <SPI.h>
 #include <AMT22_lib.h>
 #include <HighPowerStepperDriver.h>
 #include <math.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "config.h"
 #include "state_machine.h"
@@ -15,411 +22,221 @@
 #include <utilities_motor.h>
 #include <utilities.h>
 
-// #include "check.h"
-#include "motor_debug.h"
-
-// Hardware objects for single valve system
+// Global objects required by the existing library modules.
 HighPowerStepperDriver stepperDriver;
-AMT22* encoder;
-Controller* controller;
-PressureSensor* pressureSensor;
-CommHandler* commHandler;
-
-// System state variables
+AMT22* encoder = nullptr;
+Controller* controller = nullptr;
+PressureSensor* pressureSensor = nullptr;
+CommHandler* commHandler = nullptr;
 SystemState systemState;
 ChannelState channel;
 FaultFlags faults;
-
-extern bool MPV_CONTROL;
-
 bool redBandCheck = false;
 
-// Function declarations
-void stateMachineUpdate();
-void globalMonitors();
-void bootInit();
-void openLoopInit();
-void closedLoop();
-void forcedOpenLoop();
-void emergencyStop();
-void resetSystemOnMpvCycle();
+static constexpr float TEST_DELTA_DEG = 0.68f;
+// Conservative software travel boundary for the isolated valve test.
+// Not a substitute for mechanical stops or an independent power cutoff.
+static constexpr float MIN_TEST_ANGLE_DEG = 32.0f;
+static constexpr float MAX_TEST_ANGLE_DEG = 88.0f;
+static char command[16] = {0};
+static uint8_t commandLength = 0;
+static bool running = false;
 
-#ifdef MOTOR_DEBUG_TEXT
-// Route libc printf to the Uno USB UART. Use only for a TEXT debug session.
-static int motorDebugPutchar(char c, FILE*) {
-    if (c == '\n') Serial.write('\r');
-    Serial.write((uint8_t)c);
-    return 0;
+static long cd(float degrees) { return lroundf(degrees * 100.0f); }
+
+static void runCorrection(unsigned long trial, float target, float initial) {
+    float error = target - initial;
+    int noMotionCount = 0;
+    unsigned long iter = 0;
+    unsigned long startMs = millis();
+    unsigned long totalSteps = 0;
+
+    Serial.print(F("[TRIAL_START] trial=")); Serial.print(trial);
+    Serial.print(F(" t_ms=")); Serial.print(startMs);
+    Serial.print(F(" initial_cdeg=")); Serial.print(cd(initial));
+    Serial.print(F(" target_cdeg=")); Serial.print(cd(target));
+    Serial.print(F(" error_cdeg=")); Serial.println(cd(error));
+
+    // This is intentionally the original unbounded target-error condition.
+    while (fabs(error) > MotorControlConfig::ANGLE_DEADBAND_DEG) {
+        ++iter;
+        const float desiredSteps = MotorControlConfig::KP_STEPS_PER_DEG * error;
+        const long steps = lroundf(desiredSteps);
+        const float before = getEncoderAngle();  // original encoder read #1
+
+        Serial.print(F("[MOVE] trial=")); Serial.print(trial);
+        Serial.print(F(" iter=")); Serial.print(iter);
+        Serial.print(F(" t_ms=")); Serial.print(millis());
+        Serial.print(F(" before_cdeg=")); Serial.print(cd(before));
+        Serial.print(F(" target_cdeg=")); Serial.print(cd(target));
+        Serial.print(F(" error_cdeg=")); Serial.print(cd(error));
+        Serial.print(F(" steps=")); Serial.println(steps);
+
+        // Cannot safely use invalid encoder values to command further movement.
+        if (!isAngleValid(before)) {
+            Serial.println(F("[STOP] INVALID ENCODER BEFORE MOTOR STEPS"));
+            stepperDriver.disableDriver();
+            while (true) delay(1000);
+        }
+        // Do not request a correction that would knowingly cross the bench
+        // travel boundary. Note: a misbehaving motor can still overshoot.
+        // if (before < MIN_TEST_ANGLE_DEG ||
+        //     target < MIN_TEST_ANGLE_DEG ||
+        //     (steps < 0 && before + steps * HardwareConfig::DEGREES_PER_STEP < MIN_TEST_ANGLE_DEG)) {
+        //     Serial.println(F("[STOP] LOWER TRAVEL BOUNDARY (no more steps)"));
+        //     stepperDriver.disableDriver();
+        //     while (true) delay(1000);
+        // }
+        if (steps == 0) {
+            Serial.println(F("[TRIAL_EXIT] steps rounded to zero (original early return)"));
+            return;
+        }
+
+        // Identical direction mapping, step() calls and delay to original motor loop.
+        stepperDriver.setDirection(steps > 0 ? 0 : 1);
+        const long n = labs(steps);
+        const unsigned long stepStart = micros();
+        for (long i = 0; i < n; ++i) {
+            stepperDriver.step();
+            delayMicroseconds(HardwareConfig::STEP_PERIOD_US);
+        }
+        totalSteps += (unsigned long)n;
+        const unsigned long stepDuration = micros() - stepStart;
+
+        const float motionRead = getEncoderAngle(); // original encoder read #2
+        if (!isAngleValid(motionRead)) {
+            Serial.println(F("[STOP] INVALID ENCODER AFTER MOTOR STEPS"));
+            stepperDriver.disableDriver();
+            while (true) delay(1000);
+        }
+        const bool detected = fabs(motionRead - before) >
+            FDIRConfig::MOTION_DETECTED_ANGLE_THRESHOLD;
+        if (!detected) {
+            ++noMotionCount;
+            if (noMotionCount >= 3) faults.noMotion = true; // same flag behavior
+        } else {
+            noMotionCount = 0;
+        }
+
+        const float errorRead = getEncoderAngle(); // original encoder read #3
+        if (!isAngleValid(errorRead)) {
+            Serial.println(F("[STOP] INVALID ENCODER AT ERROR UPDATE"));
+            stepperDriver.disableDriver();
+            while (true) delay(1000);
+        }
+        const float priorError = error;
+        error = target - errorRead;
+
+        Serial.print(F("[RESULT] trial=")); Serial.print(trial);
+        Serial.print(F(" iter=")); Serial.print(iter);
+        Serial.print(F(" motion_read_cdeg=")); Serial.print(cd(motionRead));
+        Serial.print(F(" error_read_cdeg=")); Serial.print(cd(errorRead));
+        Serial.print(F(" delta_cdeg=")); Serial.print(cd(motionRead - before));
+        Serial.print(F(" expected_delta_cdeg=")); Serial.print(cd(steps * HardwareConfig::DEGREES_PER_STEP));
+        Serial.print(F(" error_after_cdeg=")); Serial.print(cd(error));
+        Serial.print(F(" detected=")); Serial.print(detected ? 1 : 0);
+        Serial.print(F(" no_motion_count=")); Serial.print(noMotionCount);
+        Serial.print(F(" step_us=")); Serial.print(stepDuration);
+        Serial.print(F(" elapsed_ms=")); Serial.println(millis() - startMs);
+        if (priorError * error < 0.0f) Serial.println(F("[OSC] ERROR SIGN CHANGED"));
+        if (fabs(error) > fabs(priorError)) Serial.println(F("[PROGRESS] ERROR INCREASED"));
+        else if (fabs(error) < fabs(priorError)) Serial.println(F("[PROGRESS] ERROR DECREASED"));
+        else Serial.println(F("[PROGRESS] ERROR UNCHANGED"));
+    }
+    Serial.print(F("[TRIAL_DONE] trial=")); Serial.print(trial);
+    Serial.print(F(" iters=")); Serial.print(iter);
+    Serial.print(F(" steps=")); Serial.print(totalSteps);
+    Serial.print(F(" elapsed_ms=")); Serial.print(millis() - startMs);
+    Serial.print(F(" final_error_cdeg=")); Serial.println(cd(error));
 }
-static FILE motorDebugStream;
-#endif
+
+static void runRepeatedTests() {
+    running = true;
+    const float firstAngle = getEncoderAngle();
+    if (!isAngleValid(firstAngle)) {
+        Serial.println(F("[REFUSED] Invalid angle or too close to lower travel boundary"));
+        running = false;
+        return;
+    }
+
+    Serial.print(F("[ARMED] first_angle_cdeg=")); Serial.println(cd(firstAngle));
+    Serial.println(F("[ARMED] Each target = current encoder angle - 0.68 degrees"));
+    Serial.println(F("[ARMED] No return strokes; no iteration/step/time caps."));
+    Serial.print(F("[ARMED] lower_boundary_cdeg=")); Serial.println(cd(MIN_TEST_ANGLE_DEG));
+    Serial.println(F("[ARMED] Independent motor-power cutoff required."));
+    stepperDriver.enableDriver();
+    delay(20);
+
+    unsigned long trial = 0;
+    while (true) {
+        // NEW: compute *both* initial angle and target on every trial.
+        // No fixed center, no alternate return target. A trial that fails
+        // to converge remains in runCorrection and prevents new trials.
+        const float current = getEncoderAngle();
+        if (!isAngleValid(current)) {
+            Serial.println(F("[STOP] INVALID ENCODER BETWEEN TRIALS"));
+            break;
+        }
+        const float target = current + TEST_DELTA_DEG;
+        // if (target > MAX_TEST_ANGLE_DEG) {
+        //     Serial.print(F("[STOP] Reached lower test boundary. current_cdeg="));
+        //     Serial.println(cd(current));
+        //     break;
+        // }
+        ++trial;
+        runCorrection(trial, target, current);
+    }
+    stepperDriver.disableDriver();
+    running = false;
+}
 
 void setup() {
     Serial.begin(CommConfig::BAUD_RATE);
-#ifdef MOTOR_DEBUG_TEXT
-    fdev_setup_stream(&motorDebugStream, motorDebugPutchar, nullptr, _FDEV_SETUP_WRITE);
-    stdout = &motorDebugStream;
-    MOTOR_LOG("[BOOT] MOTOR_DEBUG_TEXT enabled; binary telemetry OFF\n");
-#endif
-    
-    // Initialize SPI and pins
     SPI.begin();
-    pinMode(HardwareConfig::CB_ONOFF_PIN, INPUT);
-#ifndef NO_MANUAL_ABORT
-    pinMode(HardwareConfig::MANUAL_ABORT_PIN, INPUT_PULLUP);
-#endif
-
-    // Configure stepper driver
     stepperDriver.setChipSelectPin(HardwareConfig::MOTOR_CS_PIN);
     stepperDriver.resetSettings();
     stepperDriver.clearStatus();
     stepperDriver.setDecayMode(HPSDDecayMode::AutoMixed);
     stepperDriver.setCurrentMilliamps36v4(HardwareConfig::MOTOR_CURRENT_MA);
     stepperDriver.setStepMode(HPSDStepMode::MicroStep1);
-    stepperDriver.enableDriver();
     delay(20);
-    
-    // Configure encoder (Arduino-defined constants)
-    setUpSPI(PIN_SPI_MOSI, PIN_SPI_MISO, 
+
+    setUpSPI(PIN_SPI_MOSI, PIN_SPI_MISO,
              PIN_SPI_SCK, HardwareConfig::ENCODER_SPI_MAX_DATA_RATE);
-    
-    // Initialize encoder
     pinMode(HardwareConfig::ENCODER_CS_PIN, OUTPUT);
     digitalWrite(HardwareConfig::ENCODER_CS_PIN, HIGH);
     encoder = new AMT22(HardwareConfig::ENCODER_CS_PIN, 12);
     delay(20);
-
-    // Initialize global objects
-    controller = new Controller(ControllerConfig::KP, ControllerConfig::KI, ControllerConfig::KD);
-    pressureSensor = new PressureSensor();
-    commHandler = new CommHandler();
-    
-    // Initialize timers
     systemState.initTimers();
-    
-    // Initialize MPV to closed state
+    faults.clear();
     setMPV(false);
+
+    Serial.println(F("[BOOT] ONE-DIRECTION RELATIVE SMALL-ERROR REPRO; NO AUTO MOTION"));
+    Serial.println(F("[SETUP] Isolated/unpressurized bench ONLY. Type ARM and Enter."));
+    Serial.print(F("[CONFIG] test_delta_cdeg=68 deadband_cdeg="));
+    Serial.print(cd(MotorControlConfig::ANGLE_DEADBAND_DEG));
+    Serial.print(F(" step_period_us="));
+    Serial.println(HardwareConfig::STEP_PERIOD_US);
+    Serial.print(F("[CONFIG] min_test_angle_cdeg="));
+    Serial.println(cd(MIN_TEST_ANGLE_DEG));
 }
 
 void loop() {
-#ifdef MOTOR_DEBUG_TEXT
-    static unsigned long lastLoopLog = 0;
-    const bool traceLoop = (millis() - lastLoopLog >= 1000UL);
-    if (traceLoop) {
-        lastLoopLog = millis();
-        MOTOR_LOG("[LOOP] enter t=%lu state=%d\n", millis(), (int)systemState.currentState);
-    }
-#endif
-    commHandler->processIncomingNonBlocking();
-    globalMonitors();
-#ifdef MOTOR_DEBUG_TEXT
-    if (traceLoop) MOTOR_LOG("[LOOP] before stateMachineUpdate t=%lu\n", millis());
-#endif
-    stateMachineUpdate();
-#ifdef MOTOR_DEBUG_TEXT
-    if (traceLoop) MOTOR_LOG("[LOOP] after stateMachineUpdate t=%lu\n", millis());
-    // Intentional: text-only debug, NO binary telemetry on this UART.
-#else
-    publishTelemetry();
-#endif
-}
-
-void globalMonitors() {
-
-#ifndef NO_MANUAL_ABORT
-    // Manual abort check
-    if (isManualAbortPressed()) {
-        faults.manualAbort = true;
-        setMPV(false);
-        systemState.changeStateTo(SystemStateEnum::EMERGENCY_STOP);
-        return;
-    }
-#endif
-    
-    // If system was running and MPV gets turned off, transition to open loop init and reset
-    if (!getMPVState() && (systemState.currentState == SystemStateEnum::CLOSED_LOOP || systemState.currentState == SystemStateEnum::FORCED_OPEN_LOOP)) {
-        setMPV(false);
-        resetSystemOnMpvCycle(); 
-        return;
-    }
-
-    // Communication watchdog
-    static unsigned long commLostTime = 0;
-    if (!commHandler->isCommHealthy()) {
-        faults.commTimeout = true;
-        if (commLostTime == 0) commLostTime = millis();
-        // If comm not reestablished in COMM_TIMEOUT_S, go to open loop
-        if (millis() - commLostTime > (TimingConfig::COMM_TIMEOUT_S / 2 * 1000)) {
-            if (systemState.currentState == SystemStateEnum::CLOSED_LOOP) {
-                systemState.changeStateTo(SystemStateEnum::FORCED_OPEN_LOOP);
+    while (Serial.available() > 0) {
+        const char ch = (char)Serial.read();
+        if (ch == '\r' || ch == '\n') {
+            if (commandLength) {
+                command[commandLength] = '\0';
+                if (strcmp(command, "ARM") == 0 && !running) {
+                    commandLength = 0;
+                    runRepeatedTests(); // deliberately doesn't return on normal operation
+                    return;
+                }
+                Serial.println(F("[INFO] Type ARM and Enter to begin"));
+                commandLength = 0;
             }
-        }
-    } else {
-        // Reset commLostTime if comm is healthy
-        faults.commTimeout = false;
-        commLostTime = 0;
-    }
-
-    // State Sync Check with other controller
-    if (commHandler->isCommHealthy()) {        
-        // Get current angle for position-based sync rules
-        float currentAngle = getEncoderAngle();
-        if (!isAngleValid(currentAngle)) {
-            faults.encoderMismatch = true;
-            systemState.changeStateTo(SystemStateEnum::EMERGENCY_STOP);
-            return;
-        }
-        
-        // Apply state synchronization rules
-        SystemStateEnum syncedState = getSyncedState(systemState.currentState, commHandler->getOtherCtrlerState(), currentAngle);
-        
-        // Only change state if sync rules determine a different state is needed
-        if (syncedState != systemState.currentState) {
-            systemState.changeStateTo(syncedState);
+        } else if (commandLength < sizeof(command) - 1) {
+            command[commandLength++] = ch;
         }
     }
-}
-
-void stateMachineUpdate() {
-    switch (systemState.currentState) {
-        case SystemStateEnum::BOOT_INIT:
-            bootInit();
-            break;
-            
-        case SystemStateEnum::OPEN_LOOP_INIT:
-            openLoopInit();
-            break;
-            
-        case SystemStateEnum::CLOSED_LOOP:
-            closedLoop();
-            break;
-            
-        case SystemStateEnum::FORCED_OPEN_LOOP:
-            forcedOpenLoop();
-            break;
-            
-        case SystemStateEnum::EMERGENCY_STOP:
-            emergencyStop();
-            break;
-            
-        default:
-            // Invalid state, go to emergency stop
-            systemState.changeStateTo(SystemStateEnum::EMERGENCY_STOP);
-            break;
-    }
-}
-
-void bootInit() {
-    if (!systemState.systemInitialized) {
-        faults.clear();
-        channel.targetAngle = ValveConfig::START_ANGLE;
-        float encAngle = getEncoderAngle();
-        if (!isAngleValid(encAngle)) {
-            faults.encoderMismatch = true;
-            systemState.changeStateTo(SystemStateEnum::EMERGENCY_STOP);
-            return;
-        }
-        channel.currentAngle = encAngle;
-        controller->reset();
-        
-        systemState.systemInitialized = true;
-        systemState.preClosedLoopTimer = millis();
-    }
-
-    systemState.changeStateTo(SystemStateEnum::OPEN_LOOP_INIT);
-}
-
-// Drive valve to starting position for closed-loop operation
-void openLoopInit() {
-    // Reset redBandCheck
-    redBandCheck = false;
-
-    float currentAngle = getEncoderAngle();
-    if (!isAngleValid(currentAngle)) {
-        faults.encoderMismatch = true;
-        systemState.changeStateTo(SystemStateEnum::EMERGENCY_STOP);
-        return;
-    }
-    // Update current angle for telemetry
-    channel.currentAngle = currentAngle;
-    
-    bool atTarget = isAtStartAngle(currentAngle);
-    // Move valve if not at target
-    if (!atTarget) {
-        float deltaAngle = ValveConfig::START_ANGLE - currentAngle;
-        applyMoveFilter(deltaAngle);
-
-        channel.targetAngle = currentAngle + deltaAngle;
-
-        serviceMotor();
-        
-        // Check for encoder issues
-        float newAngle = getEncoderAngle();
-        if (!isAngleValid(newAngle)) {
-            faults.encoderMismatch = true;
-            systemState.changeStateTo(SystemStateEnum::EMERGENCY_STOP);
-            return;
-        }
-        // Update current angle after movement
-        channel.currentAngle = newAngle;
-    }
-    
-    // If valve at starting position, check if MPV is open, then after the pre closed loop timer elapses go into closed loop
-    if (atTarget) {
-        if (getMPVState()) {
-            if (!systemState.mpvWasOpen) {
-                systemState.mpvWasOpen = true;
-                setMPV(true);
-                systemState.preClosedLoopTimer = millis();
-            }
-            if (millis() - systemState.preClosedLoopTimer >= (TimingConfig::SAFE_TIMER_S * 1000UL)) {
-#if OPEN_LOOP_MODE
-                systemState.changeStateTo(SystemStateEnum::FORCED_OPEN_LOOP);
-#else
-                systemState.changeStateTo(SystemStateEnum::CLOSED_LOOP);
-                systemState.enterClosedLoopTime = millis();
-                systemState.lastControlTime = millis(); // Reset timing for dt calculation
-#endif
-            }
-        } else {
-            systemState.mpvWasOpen = false;
-            setMPV(false);
-        }
-    }
-}
-
-void closedLoop() {
-    // Calculate time step for this control loop iteration
-    unsigned long now = millis();
-    float dt = (now - systemState.lastControlTime) / 1000.0f; 
-    systemState.lastControlTime = now;
-    if (dt <= 0.0f || dt > 10.0f) { // Minimum dt to avoid division by zero or unrealistic values
-        dt = TimingConfig::CONTROL_PERIOD_S; // Fallback
-    }
-    
-    // Read pressure sensors for this manifold
-    float pressure;
-    switch (readManifoldPressures(pressure)) {
-    #if USE_3_PTS
-        case SensorStatus::THREE_ILLOGICAL:
-    #else
-        case SensorStatus::TWO_ILLOGICAL:
-    #endif
-            faults.sensorFault = true;
-            systemState.changeStateTo(SystemStateEnum::FORCED_OPEN_LOOP);
-            return;
-        case SensorStatus::PENDING_FAULT:
-            return;
-        default: break;
-    }
-    
-    // Redband check (occurs if we are past the redband timeout)
-    if (redBandCheck || (millis() - systemState.enterClosedLoopTime) > TimingConfig::REDBAND_TIMEOUT * 1000UL){
-        redBandCheck = true;
-        if (!checkRedBand(pressure)){
-            faults.redBandFault = true;
-            systemState.changeStateTo(SystemStateEnum::FORCED_OPEN_LOOP);
-            return;
-        }
-    }
-    
-    float error = ControllerConfig::TARGET_PRESSURE_PSI - pressure;
-    bool inTolerance = fabs(error) <= SensorConfig::PRESSURE_TOLERANCE;
-
-    // VALVE CONTROL
-    if (!inTolerance) {
-        // Update controller
-        controller->update(error, dt);
-        float deltaAngle = controller->getError();
-        
-        // Apply move filtering (5-degree cap)
-        applyMoveFilter(deltaAngle);
-        
-        // Calculate new target angle
-        float newTargetAngle = channel.targetAngle + deltaAngle;
-        newTargetAngle = constrainAngle(newTargetAngle);
-        
-        // Command stepper motor
-        float angleBeforeMove = getEncoderAngle();
-        if (!isAngleValid(angleBeforeMove)) {
-            faults.encoderMismatch = true;
-            setMPV(false);
-            systemState.changeStateTo(SystemStateEnum::EMERGENCY_STOP);
-            return;
-        }
-        channel.targetAngle = newTargetAngle;
-        serviceMotor();
-        // Verify encoder response
-        float angleAfterMove = getEncoderAngle();
-        if (!isAngleValid(angleAfterMove)) {
-            faults.encoderMismatch = true;
-            setMPV(false);
-            systemState.changeStateTo(SystemStateEnum::EMERGENCY_STOP);
-            return;
-        }
-        channel.currentAngle = angleAfterMove;
-
-#ifdef USE_OSCILLATION_DETECTOR
-        // Check for oscillations
-        if (controller->getOscillationDetector().checkOscillation(error, millis())) {
-            faults.oscillationDetected = true;
-            systemState.changeStateTo(SystemStateEnum::FORCED_OPEN_LOOP);
-            return;
-        }
-#endif
-    }
-
-}
-
-// Safe fallback mode - move valve to open loop target angle
-void forcedOpenLoop() {
-    float currentAngle = getEncoderAngle();
-    if (!isAngleValid(currentAngle)) {
-        faults.encoderMismatch = true;
-        systemState.changeStateTo(SystemStateEnum::EMERGENCY_STOP);
-        return;
-    }
-    // Update current angle for telemetry
-    channel.currentAngle = currentAngle;
-    
-    // Move valve to open loop target angle if not already there
-    if (fabs(currentAngle - ValveConfig::OPENLOOP_TARGET_ANGLE) > ValveConfig::ANGLE_TOLERANCE) {
-        float deltaAngle = ValveConfig::OPENLOOP_TARGET_ANGLE - currentAngle;
-        applyMoveFilter(deltaAngle);
-        channel.targetAngle = currentAngle + deltaAngle;
-        serviceMotor();
-
-        float angleAfterMove = getEncoderAngle();
-        if (!isAngleValid(angleAfterMove)) {
-            faults.encoderMismatch = true;
-            setMPV(false);
-            systemState.changeStateTo(SystemStateEnum::EMERGENCY_STOP);
-            return;
-        }
-        // Update current angle after movement
-        channel.currentAngle = angleAfterMove;
-    }
-
-    // // Check for recovery conditions
-    // if (commHandler->isCommHealthy() && !faults.manualAbort) {
-    //     float pressure;
-    //     if (readManifoldPressures(pressure)) {
-    //         // Clear transient faults and attempt recovery
-    //         if (millis() - stateEntryTime > (TimingConfig::RECOVERY_DWELL_S * 1000)) {
-    //             faults.clear();
-    //             controller->reset();
-    //             currentState = SystemStateEnum::CLOSED_LOOP;
-    //             stateEntryTime = millis();
-    //             lastControlTime = millis();
-    //         }
-    //     }
-    // }
-}
-
-void emergencyStop() {
-    // Terminal safe state
-    setMPV(false);
-    stepperDriver.disableDriver();
-    
-    // System remains in emergency stop until power cycle or manual reset
 }
