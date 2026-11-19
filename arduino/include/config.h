@@ -12,7 +12,7 @@
 
 // Toggle between fuel and oxidizer system
 // Set to true for FUEL system, false for OXIDIZER system
-#define IS_FUEL_SYSTEM true
+#define IS_FUEL_SYSTEM false
 
 // Open Loop toggle
 #define OPEN_LOOP_MODE false
@@ -83,10 +83,10 @@ struct ValveConfig {
 
     #if IS_FUEL_SYSTEM
         static constexpr float OPENLOOP_TARGET_ANGLE = 48.0f; // Target angle for forced open loop
-        static constexpr float START_ANGLE = 70.0f;       // Starting position for closed loop
+        static constexpr float START_ANGLE = 48.0f;       // Starting position for closed loop
     #else
         static constexpr float OPENLOOP_TARGET_ANGLE = 46.0f; // Target angle for forced open loop
-        static constexpr float START_ANGLE = 60.0f;       // Starting position for closed loop
+        static constexpr float START_ANGLE = 46.0f;       // Starting position for closed loop
     #endif
 
     // Position tolerance
